@@ -1,0 +1,27 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@v3.31.1
+
+      - name: Build (Release x64) and package
+        shell: pwsh
+        run: .\build.ps1 -Config Release -Arch x64 -Package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmtr-x64-release
+          path: dist/*.zip
