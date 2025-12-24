@@ -193,6 +193,8 @@ if ($Package) {
         exit 1
     }
 
+    $cliPath = "out\build\$PresetName\bin\$Config\mtr_cli.exe"
+
     $distDir = Join-Path $ScriptDir "dist"
     if (-not (Test-Path $distDir)) {
         New-Item -ItemType Directory -Path $distDir | Out-Null
@@ -205,7 +207,19 @@ if ($Package) {
         Remove-Item -Path $zipPath -Force
     }
 
-    Compress-Archive -Path $exePath -DestinationPath $zipPath
+    $stagingDir = Join-Path $distDir "package-$PresetName-$Config"
+    if (Test-Path $stagingDir) {
+        Remove-Item -Path $stagingDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $stagingDir | Out-Null
+
+    Copy-Item -Path $exePath -Destination (Join-Path $stagingDir "WinMTR.exe")
+    if (Test-Path $cliPath) {
+        Copy-Item -Path $cliPath -Destination (Join-Path $stagingDir "mtr_cli.exe")
+    }
+
+    Compress-Archive -Path (Join-Path $stagingDir "*") -DestinationPath $zipPath
+    Remove-Item -Path $stagingDir -Recurse -Force
     Write-Host "  ✓ Package created: $zipPath" -ForegroundColor Gray
 }
 
