@@ -277,9 +277,15 @@ std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
         if (result) {
             break;
         }
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] DNS TXT invalid: " << query << " response=\"" << joined << "\"\n";
+        }
     }
 
     DnsRecordListFree(record, DnsFreeRecordList);
+    if (!result && asnDebugEnabled()) {
+        std::cerr << "[ASN] DNS TXT no valid record: " << query << "\n";
+    }
     return result;
 #else
     unsigned char answer[NS_PACKETSZ];
@@ -302,6 +308,9 @@ std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
     }
 
     const int count = ns_msg_count(handle, ns_s_an);
+    if (count == 0 && asnDebugEnabled()) {
+        std::cerr << "[ASN] DNS TXT empty answer: " << query << "\n";
+    }
     for (int i = 0; i < count; ++i) {
         ns_rr rr;
         if (ns_parserr(&handle, ns_s_an, i, &rr) != 0) {
@@ -332,8 +341,14 @@ std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
         if (result) {
             return result;
         }
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] DNS TXT invalid: " << query << " response=\"" << joined << "\"\n";
+        }
     }
 
+    if (asnDebugEnabled()) {
+        std::cerr << "[ASN] DNS TXT no valid record: " << query << "\n";
+    }
     return std::nullopt;
 #endif
 }
