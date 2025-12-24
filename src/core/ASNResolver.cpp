@@ -34,6 +34,36 @@ bool asnDebugEnabled() {
     return enabled;
 }
 
+bool isPrivateIPv4(uint32_t addr) {
+    const uint8_t a = (addr >> 24) & 0xFF;
+    const uint8_t b = (addr >> 16) & 0xFF;
+    if (a == 10) {
+        return true;
+    }
+    if (a == 172 && b >= 16 && b <= 31) {
+        return true;
+    }
+    if (a == 192 && b == 168) {
+        return true;
+    }
+    if (a == 100 && b >= 64 && b <= 127) {
+        return true;
+    }
+    if (a == 127) {
+        return true;
+    }
+    if (a == 169 && b == 254) {
+        return true;
+    }
+    if (a == 0) {
+        return true;
+    }
+    if (a >= 224) {
+        return true;
+    }
+    return false;
+}
+
 std::string trim(const std::string& value) {
     size_t start = 0;
     while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
@@ -171,6 +201,13 @@ std::optional<ASNInfo> ASNResolver::resolve(const NetworkAddress& address) {
 
 std::optional<ASNInfo> ASNResolver::resolveIPv4(const IPv4Address& address) {
     const uint32_t addrInt = address.toUint32();
+
+    if (isPrivateIPv4(addrInt)) {
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] Skip private address: " << address.toString() << "\n";
+        }
+        return std::nullopt;
+    }
 
     // Check cache first
     {
