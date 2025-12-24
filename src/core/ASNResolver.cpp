@@ -85,7 +85,7 @@ std::optional<ASNInfo> parseCymruResponse(const std::string& txt) {
         parts.push_back(trim(token));
     }
 
-    if (parts.size() < 7 || parts[0] == "NA" || parts[0] == "0") {
+    if (parts.size() < 5 || parts[0] == "NA" || parts[0] == "0") {
         return std::nullopt;
     }
 
@@ -96,8 +96,10 @@ std::optional<ASNInfo> parseCymruResponse(const std::string& txt) {
         return std::nullopt;
     }
 
-    info.country = parts[3];
-    info.organization = parts[6];
+    info.country = parts[2];
+    if (parts.size() >= 7) {
+        info.organization = parts[6];
+    }
     return info.isValid() ? std::optional<ASNInfo>(info) : std::nullopt;
 }
 
