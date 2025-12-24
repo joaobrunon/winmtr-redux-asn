@@ -11,6 +11,7 @@
 #include "WinMTRNet.h"
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #ifdef _DEBUG
 #	define TRACE_MSG(msg)									\
@@ -28,6 +29,51 @@ static char THIS_FILE[] = __FILE__;
 
 void PingThread(void* p);
 
+static std::string EscapeJsonString(const char* input)
+{
+	std::string out;
+	if(!input) return out;
+	for(const unsigned char ch : std::string(input)) {
+		switch(ch) {
+			case '\\': out += "\\\\"; break;
+			case '\"': out += "\\\""; break;
+			case '\b': out += "\\b"; break;
+			case '\f': out += "\\f"; break;
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			default:
+				if(ch < 0x20) {
+					char buf[7];
+					sprintf(buf, "\\u%04x", ch);
+					out += buf;
+				} else {
+					out.push_back(static_cast<char>(ch));
+				}
+				break;
+		}
+	}
+	return out;
+}
+
+static std::string EscapeCsvField(const char* input)
+{
+	if(!input) return "";
+	std::string field(input);
+	bool needs_quotes = field.find_first_of(",\"\r\n") != std::string::npos;
+	if(!needs_quotes) return field;
+
+	std::string out;
+	out.reserve(field.size() + 2);
+	out.push_back('\"');
+	for(char ch : field) {
+		if(ch == '\"') out.push_back('\"');
+		out.push_back(ch);
+	}
+	out.push_back('\"');
+	return out;
+}
+
 //*****************************************************************************
 // BEGIN_MESSAGE_MAP
 //
@@ -44,6 +90,8 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_BN_CLICKED(ID_CHTC, OnCHTC)
 	ON_BN_CLICKED(ID_EXPT, OnEXPT)
 	ON_BN_CLICKED(ID_EXPH, OnEXPH)
+	ON_BN_CLICKED(ID_EXPCSV, OnEXPCSV)
+	ON_BN_CLICKED(ID_EXPJSON, OnEXPJSON)
 	ON_NOTIFY(NM_DBLCLK, IDC_LIST_MTR, OnDblclkList)
 	ON_CBN_SELCHANGE(IDC_COMBO_HOST, &WinMTRDialog::OnCbnSelchangeComboHost)
 	ON_CBN_SELENDOK(IDC_COMBO_HOST, &WinMTRDialog::OnCbnSelendokComboHost)
@@ -108,6 +156,8 @@ void WinMTRDialog::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_STATICJ, m_staticJ);
 	DDX_Control(pDX, ID_EXPH, m_buttonExpH);
 	DDX_Control(pDX, ID_EXPT, m_buttonExpT);
+	DDX_Control(pDX, ID_EXPCSV, m_buttonExpCsv);
+	DDX_Control(pDX, ID_EXPJSON, m_buttonExpJson);
 }
 
 
@@ -748,6 +798,51 @@ void WinMTRDialog::OnEXPT()
 
 
 //*****************************************************************************
+// WinMTRDialog::OnEXPCSV
+//
+//
+//*****************************************************************************
+void WinMTRDialog::OnEXPCSV()
+{
+	TCHAR BASED_CODE szFilter[] = _T("CSV Files (*.csv)|*.csv|All Files (*.*)|*.*||");
+
+	CFileDialog dlg(FALSE,
+					_T("CSV"),
+					NULL,
+					OFN_HIDEREADONLY | OFN_EXPLORER,
+					szFilter,
+					this);
+	if(dlg.DoModal() == IDOK) {
+		char buf[255];
+		int nh = wmtrnet->GetMax();
+
+		std::ostringstream csv;
+		csv << "Host,LossPercent,Sent,Recv,Best,Avg,Worst,Last\r\n";
+
+		for(int i=0; i <nh ; i++) {
+			wmtrnet->GetName(i, buf);
+			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
+
+			csv << EscapeCsvField(buf) << ","
+				<< wmtrnet->GetPercent(i) << ","
+				<< wmtrnet->GetXmit(i) << ","
+				<< wmtrnet->GetReturned(i) << ","
+				<< wmtrnet->GetBest(i) << ","
+				<< wmtrnet->GetAvg(i) << ","
+				<< wmtrnet->GetWorst(i) << ","
+				<< wmtrnet->GetLast(i) << "\r\n";
+		}
+
+		FILE* fp = fopen(dlg.GetPathName(), "wt");
+		if(fp != NULL) {
+			fprintf(fp, "%s", csv.str().c_str());
+			fclose(fp);
+		}
+	}
+}
+
+
+//*****************************************************************************
 // WinMTRDialog::OnEXPH
 //
 //
@@ -801,6 +896,64 @@ void WinMTRDialog::OnEXPH()
 	}
 	
 	
+}
+
+
+//*****************************************************************************
+// WinMTRDialog::OnEXPJSON
+//
+//
+//*****************************************************************************
+void WinMTRDialog::OnEXPJSON()
+{
+	TCHAR BASED_CODE szFilter[] = _T("JSON Files (*.json)|*.json|All Files (*.*)|*.*||");
+
+	CFileDialog dlg(FALSE,
+					_T("JSON"),
+					NULL,
+					OFN_HIDEREADONLY | OFN_EXPLORER,
+					szFilter,
+					this);
+
+	if(dlg.DoModal() == IDOK) {
+		char buf[255];
+		int nh = wmtrnet->GetMax();
+
+		CString target;
+		m_comboHost.GetWindowText(target);
+
+		std::ostringstream json;
+		json << "{\r\n";
+		json << "  \"target\": \"" << EscapeJsonString((LPCTSTR)target) << "\",\r\n";
+		json << "  \"hops\": [\r\n";
+
+		for(int i=0; i <nh ; i++) {
+			wmtrnet->GetName(i, buf);
+			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
+
+			json << "    {\r\n";
+			json << "      \"host\": \"" << EscapeJsonString(buf) << "\",\r\n";
+			json << "      \"lossPercent\": " << wmtrnet->GetPercent(i) << ",\r\n";
+			json << "      \"sent\": " << wmtrnet->GetXmit(i) << ",\r\n";
+			json << "      \"recv\": " << wmtrnet->GetReturned(i) << ",\r\n";
+			json << "      \"best\": " << wmtrnet->GetBest(i) << ",\r\n";
+			json << "      \"avg\": " << wmtrnet->GetAvg(i) << ",\r\n";
+			json << "      \"worst\": " << wmtrnet->GetWorst(i) << ",\r\n";
+			json << "      \"last\": " << wmtrnet->GetLast(i) << "\r\n";
+			json << "    }";
+			if(i < nh - 1) json << ",";
+			json << "\r\n";
+		}
+
+		json << "  ]\r\n";
+		json << "}\r\n";
+
+		FILE* fp = fopen(dlg.GetPathName(), "wt");
+		if(fp != NULL) {
+			fprintf(fp, "%s", json.str().c_str());
+			fclose(fp);
+		}
+	}
 }
 
 

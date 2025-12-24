@@ -115,9 +115,17 @@ endif()
 # CLI Tool (Cross-Platform)
 # ============================================================================
 if(BUILD_CLI AND BUILD_CORE_LIB)
-    # CLI tool will be added in next phase
-    # For now, create placeholder
-    message(STATUS "CLI tool will be added in Phase 2B")
+    add_executable(mtr_cli
+        src/cli/mtr_cli.cpp
+    )
+
+    target_link_libraries(mtr_cli PRIVATE mtr_core)
+
+    if(MSVC)
+        target_compile_options(mtr_cli PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(mtr_cli PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 # ============================================================================

@@ -24,6 +24,9 @@
 .PARAMETER Install
     Install after building
 
+.PARAMETER Package
+    Create a zip package with the built executable
+
 .EXAMPLE
     .\build.ps1
     Build x64 Release configuration
@@ -50,7 +53,8 @@ param(
 
     [switch]$Clean,
     [switch]$BuildOnly,
-    [switch]$Install
+    [switch]$Install,
+    [switch]$Package
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,6 +179,34 @@ if ($Install) {
     }
 
     Write-Host "  ✓ Installation completed" -ForegroundColor Gray
+}
+
+# ============================================================================
+# Package (optional)
+# ============================================================================
+if ($Package) {
+    Write-Host "`n[6/6] Packaging..." -ForegroundColor Green
+
+    $exePath = "out\build\$PresetName\bin\$Config\WinMTR.exe"
+    if (-not (Test-Path $exePath)) {
+        Write-Error "Executable not found at expected location: $exePath"
+        exit 1
+    }
+
+    $distDir = Join-Path $ScriptDir "dist"
+    if (-not (Test-Path $distDir)) {
+        New-Item -ItemType Directory -Path $distDir | Out-Null
+    }
+
+    $zipName = "WinMTR-$PresetName-$Config.zip"
+    $zipPath = Join-Path $distDir $zipName
+
+    if (Test-Path $zipPath) {
+        Remove-Item -Path $zipPath -Force
+    }
+
+    Compress-Archive -Path $exePath -DestinationPath $zipPath
+    Write-Host "  ✓ Package created: $zipPath" -ForegroundColor Gray
 }
 
 # ============================================================================

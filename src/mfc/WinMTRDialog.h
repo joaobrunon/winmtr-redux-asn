@@ -69,6 +69,8 @@ public:
 	
 	CButton	m_buttonExpT;
 	CButton	m_buttonExpH;
+	CButton	m_buttonExpCsv;
+	CButton	m_buttonExpJson;
 	
 	int InitMTRNet();
 	
@@ -118,6 +120,8 @@ protected:
 	afx_msg void OnCHTC();
 	afx_msg void OnEXPT();
 	afx_msg void OnEXPH();
+	afx_msg void OnEXPCSV();
+	afx_msg void OnEXPJSON();
 	
 	afx_msg void OnDblclkList(NMHDR* pNMHDR, LRESULT* pResult);
 	
