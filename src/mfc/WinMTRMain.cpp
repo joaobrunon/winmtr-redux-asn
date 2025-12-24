@@ -137,7 +137,7 @@ void WinMTRMain::ParseCommandLineParams(LPTSTR cmd, WinMTRDialog* wmtrdlg)
 //
 //
 //*****************************************************************************
-int WinMTRMain::GetParamValue(LPTSTR cmd, char* param, char sparam, char* value)
+int WinMTRMain::GetParamValue(LPTSTR cmd, const char* param, char sparam, char* value)
 {
 	char* p;
 	
