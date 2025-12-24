@@ -9,6 +9,8 @@
 #include "ASNResolver.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <iostream>
 #include <sstream>
 
 #ifdef _WIN32
@@ -16,12 +18,21 @@
 #include <windns.h>
 #else
 #include <arpa/nameser.h>
+#include <netdb.h>
 #include <resolv.h>
 #endif
 
 namespace mtr {
 
 namespace {
+
+bool asnDebugEnabled() {
+    static const bool enabled = []() {
+        const char* value = std::getenv("MTR_ASN_DEBUG");
+        return value && value[0] != '\0';
+    }();
+    return enabled;
+}
 
 std::string trim(const std::string& value) {
     size_t start = 0;
@@ -238,6 +249,9 @@ std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
     );
 
     if (status != ERROR_SUCCESS || !record) {
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] DNS query failed: " << query << " status=" << status << "\n";
+        }
         return std::nullopt;
     }
 
@@ -271,11 +285,19 @@ std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
     unsigned char answer[NS_PACKETSZ];
     const int len = res_query(query.c_str(), ns_c_in, ns_t_txt, answer, sizeof(answer));
     if (len < 0) {
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] DNS query failed: " << query << " h_errno=" << h_errno
+                      << " (" << hstrerror(h_errno) << ")\n";
+        }
         return std::nullopt;
     }
 
     ns_msg handle;
     if (ns_initparse(answer, len, &handle) < 0) {
+        if (asnDebugEnabled()) {
+            std::cerr << "[ASN] DNS parse failed: " << query << " h_errno=" << h_errno
+                      << " (" << hstrerror(h_errno) << ")\n";
+        }
         return std::nullopt;
     }
 
