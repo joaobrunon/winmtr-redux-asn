@@ -11,6 +11,7 @@
 #include "Types.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cmath>
@@ -23,6 +24,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #if defined(__linux__)
@@ -171,6 +173,49 @@ bool addressEqualsIPv4(const mtr::NetworkAddress& addr, const mtr::IPv4Address& 
     return std::get<mtr::IPv4Address>(addr) == ipv4;
 }
 
+std::optional<mtr::IPv4Address> getIPv4Address(const mtr::NetworkAddress& addr) {
+    if (!std::holds_alternative<mtr::IPv4Address>(addr)) {
+        return std::nullopt;
+    }
+    return std::get<mtr::IPv4Address>(addr);
+}
+
+constexpr auto kAsnRetryInterval = std::chrono::seconds(5);
+
+std::optional<mtr::ASNInfo> resolveAsnWithRetry(
+    mtr::ASNResolver& resolver,
+    std::unordered_map<uint32_t, mtr::ASNInfo>& cache,
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point>& lastAttempt,
+    const mtr::NetworkAddress& address) {
+    const auto ipv4 = getIPv4Address(address);
+    if (!ipv4) {
+        return std::nullopt;
+    }
+
+    const uint32_t key = ipv4->toUint32();
+    if (key == 0) {
+        return std::nullopt;
+    }
+
+    auto cached = cache.find(key);
+    if (cached != cache.end()) {
+        return cached->second;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    auto last = lastAttempt.find(key);
+    if (last != lastAttempt.end() && now - last->second < kAsnRetryInterval) {
+        return std::nullopt;
+    }
+
+    lastAttempt[key] = now;
+    auto result = resolver.resolve(address);
+    if (result) {
+        cache[key] = *result;
+    }
+    return result;
+}
+
 void printHeader(int round) {
     std::cout << "\nRodada " << round << "\n";
     std::cout << "Hop  Loss%   Snt   Rcv  Last  Avg   Best  Wrst  Endereco           ASN\n";
@@ -251,6 +296,8 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
     constexpr uint16_t basePort = 33434;
     std::vector<mtr::HopStatistics> hops(static_cast<size_t>(options.maxHops));
     mtr::ASNResolver asnResolver;
+    std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
     int finalHop = -1;
 
     for (int round = 1; round <= options.count; ++round) {
@@ -357,7 +404,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
             }
 
             if (options.resolveASN && !hop.asn) {
-                auto asnInfo = asnResolver.resolve(hop.address);
+                auto asnInfo = resolveAsnWithRetry(asnResolver, asnCache, asnLastAttempt, hop.address);
                 if (asnInfo) {
                     hop.asn = *asnInfo;
                 }
@@ -492,6 +539,9 @@ int main(int argc, char** argv) {
         std::mutex doneMutex;
         std::condition_variable doneCv;
         bool done = false;
+        mtr::ASNResolver asnResolver;
+        std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
+        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
 
         mtr::MTREngine engine([&](const mtr::TraceResult& result) {
             if (g_interrupted.load()) {
@@ -504,7 +554,18 @@ int main(int argc, char** argv) {
             const int current = ++rounds;
             printHeader(current);
             for (size_t i = 0; i < result.hops.size(); ++i) {
-                printHopLine(i, result.hops[i]);
+                auto displayHop = result.hops[i];
+                if (displayHop.asn) {
+                    if (const auto ipv4 = getIPv4Address(displayHop.address)) {
+                        asnCache[ipv4->toUint32()] = *displayHop.asn;
+                    }
+                } else if (options.resolveASN) {
+                    auto asnInfo = resolveAsnWithRetry(asnResolver, asnCache, asnLastAttempt, displayHop.address);
+                    if (asnInfo) {
+                        displayHop.asn = *asnInfo;
+                    }
+                }
+                printHopLine(i, displayHop);
             }
             if (current >= options.count) {
                 std::lock_guard<std::mutex> lock(doneMutex);
