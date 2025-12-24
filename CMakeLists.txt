@@ -77,11 +77,13 @@ if(BUILD_CORE_LIB)
         target_link_libraries(mtr_core PUBLIC
             ws2_32      # Winsock 2
             iphlpapi    # ICMP APIs
+            dnsapi      # DNS API (ASN lookup)
         )
     else()
         # Linux/Unix - needs pthread for threads
         target_link_libraries(mtr_core PUBLIC
             pthread
+            resolv
         )
     endif()
 

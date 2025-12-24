@@ -8,8 +8,65 @@
 
 #include "ASNResolver.h"
 #include <algorithm>
+#include <cctype>
+#include <sstream>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <windns.h>
+#else
+#include <arpa/nameser.h>
+#include <resolv.h>
+#endif
 
 namespace mtr {
+
+namespace {
+
+std::string trim(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+        ++start;
+    }
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
+std::optional<ASNInfo> parseCymruResponse(const std::string& txt) {
+    std::vector<std::string> parts;
+    std::stringstream stream(txt);
+    std::string token;
+
+    while (std::getline(stream, token, '|')) {
+        parts.push_back(trim(token));
+    }
+
+    if (parts.size() < 7 || parts[0] == "NA" || parts[0] == "0") {
+        return std::nullopt;
+    }
+
+    ASNInfo info{};
+    try {
+        info.number = static_cast<uint32_t>(std::stoul(parts[0]));
+    } catch (...) {
+        return std::nullopt;
+    }
+
+    info.country = parts[3];
+    info.organization = parts[6];
+    return info.isValid() ? std::optional<ASNInfo>(info) : std::nullopt;
+}
+
+std::string reverseIPv4(const IPv4Address& address) {
+    const auto& b = address.bytes;
+    return std::to_string(b[3]) + "." + std::to_string(b[2]) + "." +
+           std::to_string(b[1]) + "." + std::to_string(b[0]);
+}
+
+} // namespace
 
 //=============================================================================
 // Well-Known ASN Database (Hardcoded for offline operation)
@@ -113,8 +170,13 @@ std::optional<ASNInfo> ASNResolver::resolveIPv4(const IPv4Address& address) {
         }
     }
 
-    // Try well-known database
-    auto result = resolveWellKnown(address);
+    // Try DNS (Team Cymru)
+    auto result = resolveDNS(address);
+
+    // Fallback to well-known database
+    if (!result) {
+        result = resolveWellKnown(address);
+    }
 
     // Cache the result (even if null, to avoid repeated lookups)
     if (result) {
@@ -158,14 +220,100 @@ std::optional<ASNInfo> ASNResolver::resolveWellKnown(const IPv4Address& address)
 }
 
 std::optional<ASNInfo> ASNResolver::resolveDNS(const IPv4Address& address) {
-    // TODO: Implement Team Cymru DNS lookup
+    // Team Cymru DNS lookup:
     // Format: reverse-ip.origin.asn.cymru.com
     // Example: 8.8.8.8 -> 8.8.8.8.origin.asn.cymru.com
     // Returns: "ASN | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
+    const std::string query = reverseIPv4(address) + ".origin.asn.cymru.com";
 
-    // For now, return null (will be implemented in future version)
-    (void)address;  // Suppress unused warning
+#ifdef _WIN32
+    PDNS_RECORDA record = nullptr;
+    const DNS_STATUS status = DnsQuery_A(
+        query.c_str(),
+        DNS_TYPE_TEXT,
+        DNS_QUERY_STANDARD,
+        nullptr,
+        &record,
+        nullptr
+    );
+
+    if (status != ERROR_SUCCESS || !record) {
+        return std::nullopt;
+    }
+
+    std::optional<ASNInfo> result;
+    for (auto* current = record; current; current = current->pNext) {
+        if (current->wType != DNS_TYPE_TEXT) {
+            continue;
+        }
+
+        const DNS_TXT_DATAA& txt = current->Data.TXT;
+        if (txt.dwStringCount == 0 || !txt.pStringArray) {
+            continue;
+        }
+
+        std::string joined;
+        for (DWORD i = 0; i < txt.dwStringCount; ++i) {
+            if (txt.pStringArray[i]) {
+                joined += txt.pStringArray[i];
+            }
+        }
+
+        result = parseCymruResponse(joined);
+        if (result) {
+            break;
+        }
+    }
+
+    DnsRecordListFree(record, DnsFreeRecordList);
+    return result;
+#else
+    unsigned char answer[NS_PACKETSZ];
+    const int len = res_query(query.c_str(), ns_c_in, ns_t_txt, answer, sizeof(answer));
+    if (len < 0) {
+        return std::nullopt;
+    }
+
+    ns_msg handle;
+    if (ns_initparse(answer, len, &handle) < 0) {
+        return std::nullopt;
+    }
+
+    const int count = ns_msg_count(handle, ns_s_an);
+    for (int i = 0; i < count; ++i) {
+        ns_rr rr;
+        if (ns_parserr(&handle, ns_s_an, i, &rr) != 0) {
+            continue;
+        }
+        if (ns_rr_type(rr) != ns_t_txt) {
+            continue;
+        }
+
+        const unsigned char* rdata = ns_rr_rdata(rr);
+        const int rdlen = ns_rr_rdlen(rr);
+        if (rdlen < 1) {
+            continue;
+        }
+
+        std::string joined;
+        int offset = 0;
+        while (offset < rdlen) {
+            const int seglen = rdata[offset];
+            if (seglen <= 0 || offset + 1 + seglen > rdlen) {
+                break;
+            }
+            joined.append(reinterpret_cast<const char*>(rdata + offset + 1), seglen);
+            offset += seglen + 1;
+        }
+
+        auto result = parseCymruResponse(joined);
+        if (result) {
+            return result;
+        }
+    }
+
     return std::nullopt;
+#endif
 }
 
 } // namespace mtr
