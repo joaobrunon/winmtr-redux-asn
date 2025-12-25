@@ -9,7 +9,9 @@
 #ifdef _WIN32
 
 #include "WindowsICMP.h"
+#include <algorithm>
 #include <cstring>
+#include <random>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
@@ -156,14 +158,15 @@ WindowsICMP::sendEcho(
     const NetworkAddress& destination,
     uint8_t ttl,
     uint16_t payloadSize,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     return std::visit([&](const auto& addr) -> Expected<EchoReply, std::string> {
         using T = std::decay_t<decltype(addr)>;
         if constexpr (std::is_same_v<T, IPv4Address>) {
-            return sendEchoIPv4(addr, ttl, payloadSize, timeout);
+            return sendEchoIPv4(addr, ttl, payloadSize, timeout, config);
         } else {
-            return sendEchoIPv6(addr, ttl, payloadSize, timeout);
+            return sendEchoIPv6(addr, ttl, payloadSize, timeout, config);
         }
     }, destination);
 }
@@ -185,7 +188,8 @@ WindowsICMP::sendEchoIPv4(
     const IPv4Address& dest,
     uint8_t ttl,
     uint16_t size,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     if (handleIPv4_ == INVALID_HANDLE_VALUE) {
         return std::string("IPv4 handle not available");
@@ -193,14 +197,27 @@ WindowsICMP::sendEchoIPv4(
 
     // Prepare request data
     std::vector<uint8_t> sendData(size);
-    for (size_t i = 0; i < size; ++i) {
-        sendData[i] = static_cast<uint8_t>(i);
+    if (config.bitPattern >= 0) {
+        uint8_t pattern = static_cast<uint8_t>(config.bitPattern & 0xFF);
+        if (config.bitPattern > 255) {
+            static thread_local std::mt19937 rng(std::random_device{}());
+            std::uniform_int_distribution<int> dist(0, 255);
+            pattern = static_cast<uint8_t>(dist(rng));
+        }
+        std::fill(sendData.begin(), sendData.end(), pattern);
+    } else {
+        for (size_t i = 0; i < size; ++i) {
+            sendData[i] = static_cast<uint8_t>(i);
+        }
     }
 
     // Prepare IP options
     IP_OPTION_INFORMATION ipOptions{};
     ipOptions.Ttl = ttl;
     ipOptions.Flags = IP_FLAG_DF;  // Don't fragment
+    if (config.tos >= 0) {
+        ipOptions.Tos = static_cast<unsigned char>(config.tos & 0xFF);
+    }
 
     // Prepare reply buffer
     const size_t replySize = sizeof(ICMP_ECHO_REPLY) + size + 8;
@@ -251,7 +268,8 @@ WindowsICMP::sendEchoIPv6(
     const IPv6Address& dest,
     uint8_t ttl,
     uint16_t size,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     if (!hasIPv6_ || handleIPv6_ == INVALID_HANDLE_VALUE) {
         return std::string("IPv6 not supported");
@@ -259,13 +277,26 @@ WindowsICMP::sendEchoIPv6(
 
     // Prepare request data
     std::vector<uint8_t> sendData(size);
-    for (size_t i = 0; i < size; ++i) {
-        sendData[i] = static_cast<uint8_t>(i);
+    if (config.bitPattern >= 0) {
+        uint8_t pattern = static_cast<uint8_t>(config.bitPattern & 0xFF);
+        if (config.bitPattern > 255) {
+            static thread_local std::mt19937 rng(std::random_device{}());
+            std::uniform_int_distribution<int> dist(0, 255);
+            pattern = static_cast<uint8_t>(dist(rng));
+        }
+        std::fill(sendData.begin(), sendData.end(), pattern);
+    } else {
+        for (size_t i = 0; i < size; ++i) {
+            sendData[i] = static_cast<uint8_t>(i);
+        }
     }
 
     // Prepare IP options
     IP_OPTION_INFORMATION ipOptions{};
     ipOptions.Ttl = ttl;
+    if (config.tos >= 0) {
+        ipOptions.Tos = static_cast<unsigned char>(config.tos & 0xFF);
+    }
 
     // Prepare source and destination addresses
     sockaddr_in6 sourceAddr{};

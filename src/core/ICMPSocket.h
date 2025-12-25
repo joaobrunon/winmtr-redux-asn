@@ -77,7 +77,8 @@ public:
         const NetworkAddress& destination,
         uint8_t ttl,
         uint16_t payloadSize,
-        Milliseconds timeout
+        Milliseconds timeout,
+        const TraceConfig& config
     ) = 0;
 
     /// Check if this socket supports IPv6

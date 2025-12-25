@@ -40,7 +40,8 @@ public:
         const NetworkAddress& destination,
         uint8_t ttl,
         uint16_t payloadSize,
-        Milliseconds timeout
+        Milliseconds timeout,
+        const TraceConfig& config
     ) override;
 
     [[nodiscard]] bool supportsIPv6() const noexcept override;
@@ -54,11 +55,21 @@ private:
 
     /// Send IPv4 echo request
     [[nodiscard]] Expected<EchoReply, std::string>
-    sendEchoIPv4(const IPv4Address& dest, uint8_t ttl, uint16_t size, Milliseconds timeout);
+    sendEchoIPv4(
+        const IPv4Address& dest,
+        uint8_t ttl,
+        uint16_t size,
+        Milliseconds timeout,
+        const TraceConfig& config);
 
     /// Send IPv6 echo request
     [[nodiscard]] Expected<EchoReply, std::string>
-    sendEchoIPv6(const IPv6Address& dest, uint8_t ttl, uint16_t size, Milliseconds timeout);
+    sendEchoIPv6(
+        const IPv6Address& dest,
+        uint8_t ttl,
+        uint16_t size,
+        Milliseconds timeout,
+        const TraceConfig& config);
 
     /// Calculate ICMP checksum
     [[nodiscard]] static uint16_t calculateChecksum(const void* data, size_t length) noexcept;

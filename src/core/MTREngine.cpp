@@ -191,7 +191,8 @@ void MTREngine::pingHop(uint8_t ttl, const TraceConfig& config) {
         config.destination,
         ttl,
         config.pingSize,
-        config.timeout
+        config.timeout,
+        config
     );
 
     std::optional<NetworkAddress> asnAddress;

@@ -9,11 +9,13 @@
 #ifndef _WIN32
 
 #include "PosixICMP.h"
+#include <algorithm>
 #include <unistd.h>
 #include <cstring>
 #include <cerrno>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include <random>
 
 namespace mtr {
 
@@ -93,14 +95,15 @@ PosixICMP::sendEcho(
     const NetworkAddress& destination,
     uint8_t ttl,
     uint16_t payloadSize,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     return std::visit([&](const auto& addr) -> Expected<EchoReply, std::string> {
         using T = std::decay_t<decltype(addr)>;
         if constexpr (std::is_same_v<T, IPv4Address>) {
-            return sendEchoIPv4(addr, ttl, payloadSize, timeout);
+            return sendEchoIPv4(addr, ttl, payloadSize, timeout, config);
         } else {
-            return sendEchoIPv6(addr, ttl, payloadSize, timeout);
+            return sendEchoIPv6(addr, ttl, payloadSize, timeout, config);
         }
     }, destination);
 }
@@ -122,10 +125,16 @@ PosixICMP::sendEchoIPv4(
     const IPv4Address& dest,
     uint8_t ttl,
     uint16_t size,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     if (socketIPv4_ < 0) {
         return std::string("IPv4 socket not available");
+    }
+
+    if (config.tos >= 0) {
+        const int tos = config.tos;
+        setsockopt(socketIPv4_, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
     }
 
     // Set TTL
@@ -149,8 +158,18 @@ PosixICMP::sendEchoIPv4(
     header->sequence = htons(++sequenceNumber_);
 
     // Fill payload with pattern
-    for (size_t i = 0; i < size; ++i) {
-        packet[sizeof(ICMPHeader) + i] = static_cast<uint8_t>(i);
+    if (config.bitPattern >= 0) {
+        uint8_t pattern = static_cast<uint8_t>(config.bitPattern & 0xFF);
+        if (config.bitPattern > 255) {
+            static thread_local std::mt19937 rng(std::random_device{}());
+            std::uniform_int_distribution<int> dist(0, 255);
+            pattern = static_cast<uint8_t>(dist(rng));
+        }
+        std::fill(packet.begin() + sizeof(ICMPHeader), packet.end(), pattern);
+    } else {
+        for (size_t i = 0; i < size; ++i) {
+            packet[sizeof(ICMPHeader) + i] = static_cast<uint8_t>(i);
+        }
     }
 
     // Calculate checksum
@@ -241,11 +260,18 @@ PosixICMP::sendEchoIPv6(
     const IPv6Address& dest,
     uint8_t ttl,
     uint16_t size,
-    Milliseconds timeout)
+    Milliseconds timeout,
+    const TraceConfig& config)
 {
     if (socketIPv6_ < 0) {
         return std::string("IPv6 socket not available");
     }
+
+    (void)dest;
+    (void)ttl;
+    (void)size;
+    (void)timeout;
+    (void)config;
 
     // Similar to IPv4 but using ICMPv6
     // For brevity, returning not implemented error

@@ -31,6 +31,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <random>
 
 #if defined(__linux__)
 #include <linux/errqueue.h>
@@ -292,6 +293,24 @@ std::optional<mtr::NetworkAddress> parseLiteralAddress(const std::string& host) 
 
     return std::nullopt;
 }
+
+#if defined(_WIN32)
+std::optional<sockaddr_in> parseBindIPv4(const std::string& address, int port) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<uint16_t>(std::max(0, port)));
+    if (address.empty()) {
+        addr.sin_addr.s_addr = INADDR_ANY;
+        return addr;
+    }
+    in_addr ipv4{};
+    if (inet_pton(AF_INET, address.c_str(), &ipv4) != 1) {
+        return std::nullopt;
+    }
+    addr.sin_addr = ipv4;
+    return addr;
+}
+#endif
 
 std::optional<mtr::NetworkAddress> resolveHost(const std::string& host, int family) {
     if (auto literal = parseLiteralAddress(host)) {
@@ -1023,6 +1042,10 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
         close(sock);
         return false;
     }
+    if (options.tos >= 0) {
+        int tos = options.tos;
+        setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+    }
 
     sockaddr_in destAddr{};
     destAddr.sin_family = AF_INET;
@@ -1062,6 +1085,15 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
 
             destAddr.sin_port = htons(static_cast<uint16_t>(basePort + ttl));
             std::vector<uint8_t> payload(static_cast<size_t>(options.payloadSize), 0x42);
+            if (options.bitPattern >= 0) {
+                uint8_t pattern = static_cast<uint8_t>(options.bitPattern & 0xFF);
+                if (options.bitPattern > 255) {
+                    static thread_local std::mt19937 rng(std::random_device{}());
+                    std::uniform_int_distribution<int> dist(0, 255);
+                    pattern = static_cast<uint8_t>(dist(rng));
+                }
+                std::fill(payload.begin(), payload.end(), pattern);
+            }
 
             auto start = std::chrono::steady_clock::now();
             ssize_t sent = sendto(
@@ -1224,6 +1256,16 @@ bool runTcpTraceWindows(
     const uint16_t destPort = static_cast<uint16_t>((options.port > 0) ? options.port : 80);
     destAddr.sin_port = htons(destPort);
 
+    std::optional<sockaddr_in> localBind;
+    if (!options.bindAddress.empty() || options.localPort >= 0) {
+        localBind = parseBindIPv4(options.bindAddress, options.localPort);
+        if (!localBind) {
+            std::cerr << "Invalid bind address: " << options.bindAddress << "\n";
+            closesocket(icmpSock);
+            return false;
+        }
+    }
+
     std::vector<mtr::HopStatistics> hops(static_cast<size_t>(options.maxHops));
     mtr::ASNResolver asnResolver;
     std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
@@ -1256,6 +1298,21 @@ bool runTcpTraceWindows(
                     printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
                 }
                 continue;
+            }
+
+            if (options.tos >= 0) {
+                int tos = options.tos;
+                setsockopt(tcpSock, IPPROTO_IP, IP_TOS, reinterpret_cast<const char*>(&tos), sizeof(tos));
+            }
+
+            if (localBind) {
+                if (bind(tcpSock, reinterpret_cast<sockaddr*>(&(*localBind)), sizeof(sockaddr_in)) != 0) {
+                    closesocket(tcpSock);
+                    if (!reportMode) {
+                        printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
+                    }
+                    continue;
+                }
             }
 
             int ttlVal = ttl;
@@ -1591,7 +1648,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
             int parsed = 0;
-            if (!parseInt(value, parsed)) {
+            if (!parseInt(value, parsed) || parsed < 0 || parsed > 65535) {
                 std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
@@ -1605,7 +1662,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
             int parsed = 0;
-            if (!parseInt(value, parsed)) {
+            if (!parseInt(value, parsed) || parsed < 0 || parsed > 65535) {
                 std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
@@ -1633,7 +1690,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
             int parsed = 0;
-            if (!parseInt(value, parsed)) {
+            if (!parseInt(value, parsed) || parsed < 0) {
                 std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
@@ -1675,7 +1732,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
             int parsed = 0;
-            if (!parseInt(value, parsed)) {
+            if (!parseInt(value, parsed) || parsed < 0 || parsed > 255) {
                 std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
@@ -1813,10 +1870,23 @@ int main(int argc, char** argv) {
         options.mode = "icmp";
     }
 #endif
-    if (!options.interfaceName.empty() || !options.bindAddress.empty() ||
-        options.bitPattern >= 0 || options.tos >= 0 || options.mark >= 0 ||
-        (options.mode != "tcp" && options.port >= 0) || options.localPort >= 0) {
-        warnings.emplace_back("Socket options are not supported yet; ignoring.");
+    if (options.mode != "tcp" && options.port >= 0) {
+        warnings.emplace_back("Port option is only supported for TCP on Windows; ignoring.");
+    }
+#if defined(_WIN32)
+    if (options.mode != "tcp" && (!options.bindAddress.empty() || options.localPort >= 0)) {
+        warnings.emplace_back("Bind/localport options are only supported for TCP on Windows; ignoring.");
+    }
+#else
+    if (!options.bindAddress.empty() || options.localPort >= 0) {
+        warnings.emplace_back("Bind/localport options are only supported for TCP on Windows; ignoring.");
+    }
+#endif
+    if (options.mode == "tcp" && options.bitPattern >= 0) {
+        warnings.emplace_back("Bitpattern is not supported for TCP; ignoring.");
+    }
+    if (!options.interfaceName.empty() || options.mark >= 0) {
+        warnings.emplace_back("Interface/mark options are not supported yet; ignoring.");
     }
     if (options.maxUnknown != 5) {
         warnings.emplace_back("max-unknown is not supported yet; ignoring.");
@@ -1931,6 +2001,8 @@ int main(int argc, char** argv) {
             config.timeout = mtr::Milliseconds(options.timeoutMs);
             config.resolveDNS = options.resolveDNS;
             config.resolveASN = options.resolveASN;
+            config.tos = options.tos;
+            config.bitPattern = options.bitPattern;
 
             std::atomic<int> rounds{0};
             std::mutex doneMutex;

@@ -199,6 +199,8 @@ struct TraceConfig {
     Milliseconds timeout{5000};             ///< ICMP timeout
     bool resolveDNS{true};                  ///< Resolve hostnames?
     bool resolveASN{true};                  ///< Resolve ASN information?
+    int tos{-1};                            ///< TOS/Traffic Class (-1 = default)
+    int bitPattern{-1};                     ///< Payload pattern (-1 = default)
 };
 
 //=============================================================================
