@@ -42,6 +42,13 @@
 #define IDC_COMBO_HOST                  1024
 #define IDC_EDIT_MAX_LRU                1025
 #define IDC_CHECK_IPV6                  1026
+#define IDC_CHECK_SHOWIPS               1027
+#define IDC_EDIT_TIMEOUT                1028
+#define IDC_EDIT_FIRST_TTL              1029
+#define IDC_EDIT_MAX_HOPS               1032
+#define IDC_EDIT_TOS                    1033
+#define IDC_EDIT_BITPATTERN             1034
+#define IDC_COMBO_MODE                  1035
 
 // Next default values for new objects
 // 
@@ -49,7 +56,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        135
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1027
+#define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

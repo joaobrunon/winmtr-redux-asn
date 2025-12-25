@@ -61,6 +61,7 @@ public:
 	CButton	m_buttonStart;
 	CComboBox m_comboHost;
 	CButton m_checkIPv6;
+	CButton m_checkShowIps;
 	CListCtrl m_listMTR;
 	CMFCLinkCtrl m_buttonAppnor;
 	
@@ -86,6 +87,14 @@ public:
 	bool				hasPingsizeFromCmdLine;
 	int					maxLRU;
 	bool				hasMaxLRUFromCmdLine;
+	int					maxHops;
+	int					firstTtl;
+	int					timeoutMs;
+	int					tos;
+	int					bitPattern;
+	int					probeMode;
+	bool				showIps;
+	bool				paused;
 	int					nrLRU;
 	BOOL				useDNS;
 	bool				hasUseDNSFromCmdLine;
@@ -101,6 +110,7 @@ public:
 	
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);
+	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];
@@ -114,6 +124,7 @@ protected:
 	afx_msg HCURSOR OnQueryDragIcon();
 	afx_msg void OnRestart();
 	afx_msg void OnOptions();
+	afx_msg void OnToggleShowIps();
 	virtual void OnCancel();
 	
 	afx_msg void OnCTTC();

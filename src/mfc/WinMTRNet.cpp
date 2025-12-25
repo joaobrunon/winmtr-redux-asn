@@ -20,7 +20,7 @@
 #endif
 
 #define IPFLAG_DONT_FRAGMENT	0x02
-#define MAX_HOPS				30
+#define MAX_HOPS				MaxHost
 
 struct trace_thread {
 	WinMTRNet*	winmtr;
@@ -145,16 +145,22 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 {
 	HANDLE hThreads[MAX_HOPS];
 	unsigned char hops=0;
+	int maxHops = wmtrdlg->maxHops;
+	if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
+	if(maxHops > MAX_HOPS) maxHops = MAX_HOPS;
+	int firstTtl = wmtrdlg->firstTtl;
+	if(firstTtl <= 0) firstTtl = 1;
+	if(firstTtl > maxHops) firstTtl = maxHops;
 	tracing = true;
 	ResetHops();
 	if(sockaddr->sa_family==AF_INET6) {
 		host[0].addr6.sin6_family=AF_INET6;
 		last_remote_addr6=((sockaddr_in6*)sockaddr)->sin6_addr;
-		for(; hops<MAX_HOPS;) {// one thread per TTL value
+		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {// one thread per TTL value
 			trace_thread6* current=new trace_thread6;
 			current->address=*(sockaddr_in6*)sockaddr;
 			current->winmtr=this;
-			current->ttl=hops+1;
+			current->ttl=ttl;
 			hThreads[hops]=(HANDLE)_beginthreadex(NULL,0,TraceThread6,current,0,NULL);
 			Sleep(30);
 			if(++hops>this->GetMax()) break;
@@ -162,11 +168,11 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 	} else {
 		host[0].addr.sin_family=AF_INET;
 		last_remote_addr=((sockaddr_in*)sockaddr)->sin_addr;
-		for(; hops<MAX_HOPS;) {// one thread per TTL value
+		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {// one thread per TTL value
 			trace_thread* current=new trace_thread;
 			current->address=((sockaddr_in*)sockaddr)->sin_addr;
 			current->winmtr=this;
-			current->ttl=hops+1;
+			current->ttl=ttl;
 			hThreads[hops]=(HANDLE)_beginthreadex(NULL,0,TraceThread,current,0,NULL);
 			Sleep(30);
 			if(++hops>this->GetMax()) break;
@@ -197,12 +203,20 @@ unsigned WINAPI TraceThread(void* p)
 	
 	lpstIPInfo				= &stIPInfo;
 	stIPInfo.Ttl			= (UCHAR)current->ttl;
-	stIPInfo.Tos			= 0;
+	stIPInfo.Tos			= (wmtrnet->wmtrdlg->tos >= 0) ? (UCHAR)wmtrnet->wmtrdlg->tos : 0;
 	stIPInfo.Flags			= IPFLAG_DONT_FRAGMENT;
 	stIPInfo.OptionsSize	= 0;
 	stIPInfo.OptionsData	= NULL;
 	for(int i=0; i<nDataLen; ++i) achReqData[i]=32;//whitespaces
+	if(wmtrnet->wmtrdlg->bitPattern >= 0) {
+		int pattern = wmtrnet->wmtrdlg->bitPattern;
+		if(pattern > 255) pattern = rand() % 256;
+		memset(achReqData, pattern, nDataLen);
+	}
 	while(wmtrnet->tracing) {
+		while(wmtrnet->wmtrdlg->paused && wmtrnet->tracing) {
+			Sleep(100);
+		}
 		// For some strange reason, ICMP API is not filling the TTL for icmp echo reply
 		// Check if the current thread should be closed
 		if(current->ttl > wmtrnet->GetMax()) break;
@@ -213,7 +227,7 @@ unsigned WINAPI TraceThread(void* p)
 		// - as soon as we get a hop, we start pinging directly that hop, with a greater TTL
 		// - a drawback would be that, some servers are configured to reply for TTL transit expire, but not to ping requests, so,
 		// for these servers we'll have 100% loss
-		DWORD dwReplyCount = wmtrnet->lpfnIcmpSendEcho2(wmtrnet->hICMP, 0,NULL,NULL, current->address, achReqData, nDataLen, lpstIPInfo, achRepData, sizeof(achRepData), ECHO_REPLY_TIMEOUT);
+		DWORD dwReplyCount = wmtrnet->lpfnIcmpSendEcho2(wmtrnet->hICMP, 0,NULL,NULL, current->address, achReqData, nDataLen, lpstIPInfo, achRepData, sizeof(achRepData), wmtrnet->wmtrdlg->timeoutMs);
 		wmtrnet->AddXmit(current->ttl - 1);
 		if(dwReplyCount) {
 			TRACE_MSG("TTL " << (int)current->ttl << " reply TTL " << (int)icmp_echo_reply.Options.Ttl << " Status " << icmp_echo_reply.Status << " Reply count " << dwReplyCount);
@@ -261,14 +275,22 @@ unsigned WINAPI TraceThread6(void* p)
 	
 	lpstIPInfo				= &stIPInfo;
 	stIPInfo.Ttl			= (UCHAR)current->ttl;
-	stIPInfo.Tos			= 0;
+	stIPInfo.Tos			= (wmtrnet->wmtrdlg->tos >= 0) ? (UCHAR)wmtrnet->wmtrdlg->tos : 0;
 	stIPInfo.Flags			= IPFLAG_DONT_FRAGMENT;
 	stIPInfo.OptionsSize	= 0;
 	stIPInfo.OptionsData	= NULL;
 	for(int i=0; i<nDataLen; ++i) achReqData[i]=32;//whitespaces
+	if(wmtrnet->wmtrdlg->bitPattern >= 0) {
+		int pattern = wmtrnet->wmtrdlg->bitPattern;
+		if(pattern > 255) pattern = rand() % 256;
+		memset(achReqData, pattern, nDataLen);
+	}
 	while(wmtrnet->tracing) {
+		while(wmtrnet->wmtrdlg->paused && wmtrnet->tracing) {
+			Sleep(100);
+		}
 		if(current->ttl > wmtrnet->GetMax()) break;
-		DWORD dwReplyCount = wmtrnet->lpfnIcmp6SendEcho2(wmtrnet->hICMP6, 0,NULL,NULL, &sockaddrfrom, &current->address, achReqData, nDataLen, lpstIPInfo, achRepData, sizeof(achRepData), ECHO_REPLY_TIMEOUT);
+		DWORD dwReplyCount = wmtrnet->lpfnIcmp6SendEcho2(wmtrnet->hICMP6, 0,NULL,NULL, &sockaddrfrom, &current->address, achReqData, nDataLen, lpstIPInfo, achRepData, sizeof(achRepData), wmtrnet->wmtrdlg->timeoutMs);
 		wmtrnet->AddXmit(current->ttl - 1);
 		if(dwReplyCount) {
 			TRACE_MSG("TTL " << (int)current->ttl << " Status " << icmpv6_echo_reply.Status << " Reply count " << dwReplyCount);
@@ -336,6 +358,24 @@ int WinMTRNet::GetAvg(int at)
 	return ret;
 }
 
+int WinMTRNet::GetStDev(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	double ret = 0.0;
+	if(host[at].returned > 1) {
+		ret = sqrt(host[at].rttM2 / (host[at].returned - 1));
+	}
+	ReleaseMutex(ghMutex);
+	return static_cast<int>(ret);
+}
+
+int WinMTRNet::GetJitter(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	int ret = host[at].jitterCurrent;
+	ReleaseMutex(ghMutex);
+	return ret;
+}
 int WinMTRNet::GetPercent(int at)
 {
 	WaitForSingleObject(ghMutex, INFINITE);
@@ -385,6 +425,7 @@ int WinMTRNet::GetMax()
 		}
 	}
 	ReleaseMutex(ghMutex);
+	if(max > wmtrdlg->maxHops && wmtrdlg->maxHops > 0) max = wmtrdlg->maxHops;
 	return max;
 }
 
@@ -486,6 +527,20 @@ void WinMTRNet::UpdateRTT(int at, int rtt)
 		host[at].best=rtt;
 	if(host[at].worst<rtt)
 		host[at].worst=rtt;
+	if(!host[at].hasPrev) {
+		host[at].hasPrev = true;
+	} else {
+		host[at].jitterCurrent = abs(rtt - host[at].prev);
+		host[at].jitterSamples += 1;
+		host[at].jitterMean += (host[at].jitterCurrent - host[at].jitterMean) / host[at].jitterSamples;
+		if(host[at].jitterCurrent > host[at].jitterMax) host[at].jitterMax = host[at].jitterCurrent;
+	}
+	host[at].prev = rtt;
+	int count = host[at].returned + 1;
+	double delta = rtt - host[at].rttMean;
+	host[at].rttMean += delta / count;
+	double delta2 = rtt - host[at].rttMean;
+	host[at].rttM2 += delta * delta2;
 	ReleaseMutex(ghMutex);
 }
 
@@ -520,8 +575,6 @@ void DnsResolverThread(void* p)
 	}
 	delete p;
 }
-
-
 
 
 

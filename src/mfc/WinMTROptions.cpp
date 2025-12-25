@@ -36,7 +36,13 @@ void WinMTROptions::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDIT_SIZE, m_editSize);
 	DDX_Control(pDX, IDC_EDIT_INTERVAL, m_editInterval);
 	DDX_Control(pDX, IDC_EDIT_MAX_LRU, m_editMaxLRU);
+	DDX_Control(pDX, IDC_EDIT_MAX_HOPS, m_editMaxHops);
+	DDX_Control(pDX, IDC_EDIT_FIRST_TTL, m_editFirstTtl);
+	DDX_Control(pDX, IDC_EDIT_TIMEOUT, m_editTimeout);
+	DDX_Control(pDX, IDC_EDIT_TOS, m_editTos);
+	DDX_Control(pDX, IDC_EDIT_BITPATTERN, m_editBitPattern);
 	DDX_Control(pDX, IDC_CHECK_DNS, m_checkDNS);
+	DDX_Control(pDX, IDC_COMBO_MODE, m_comboMode);
 }
 
 
@@ -61,6 +67,28 @@ BOOL WinMTROptions::OnInitDialog()
 	m_editMaxLRU.SetWindowText(strtmp);
 
 	m_checkDNS.SetCheck(useDNS);
+
+	sprintf(strtmp, "%d", maxHops);
+	m_editMaxHops.SetWindowText(strtmp);
+
+	sprintf(strtmp, "%d", firstTtl);
+	m_editFirstTtl.SetWindowText(strtmp);
+
+	sprintf(strtmp, "%d", timeoutMs);
+	m_editTimeout.SetWindowText(strtmp);
+
+	sprintf(strtmp, "%d", tos);
+	m_editTos.SetWindowText(strtmp);
+
+	sprintf(strtmp, "%d", bitPattern);
+	m_editBitPattern.SetWindowText(strtmp);
+
+	m_comboMode.ResetContent();
+	m_comboMode.AddString("ICMP");
+	m_comboMode.AddString("UDP");
+	m_comboMode.AddString("TCP");
+	if(mode < 0 || mode > 2) mode = 0;
+	m_comboMode.SetCurSel(mode);
 	
 	m_editInterval.SetFocus();
 	return FALSE;
@@ -86,6 +114,23 @@ void WinMTROptions::OnOK()
 	
 	m_editMaxLRU.GetWindowText(tmpstr, 20);
 	maxLRU = atoi(tmpstr);
+
+	m_editMaxHops.GetWindowText(tmpstr, 20);
+	maxHops = atoi(tmpstr);
+
+	m_editFirstTtl.GetWindowText(tmpstr, 20);
+	firstTtl = atoi(tmpstr);
+
+	m_editTimeout.GetWindowText(tmpstr, 20);
+	timeoutMs = atoi(tmpstr);
+
+	m_editTos.GetWindowText(tmpstr, 20);
+	tos = atoi(tmpstr);
+
+	m_editBitPattern.GetWindowText(tmpstr, 20);
+	bitPattern = atoi(tmpstr);
+
+	mode = m_comboMode.GetCurSel();
 
 	CDialog::OnOK();
 }

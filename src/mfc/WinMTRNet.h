@@ -36,6 +36,14 @@ struct s_nethost {
 	int last;				// last time
 	int best;				// best time
 	int worst;			// worst time
+	double rttMean;		// running mean
+	double rttM2;		// variance accumulator
+	int prev;				// previous rtt
+	bool hasPrev;		// has previous rtt
+	int jitterCurrent;	// current jitter
+	double jitterMean;	// mean jitter
+	int jitterMax;		// worst jitter
+	int jitterSamples;	// jitter samples
 	char name[255];
 };
 
@@ -70,6 +78,8 @@ public:
 	int		GetBest(int at);
 	int		GetWorst(int at);
 	int		GetAvg(int at);
+	int		GetStDev(int at);
+	int		GetJitter(int at);
 	int		GetPercent(int at);
 	int		GetLast(int at);
 	int		GetReturned(int at);

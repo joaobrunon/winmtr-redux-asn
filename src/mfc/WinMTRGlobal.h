@@ -56,6 +56,11 @@
 #define DEFAULT_INTERVAL	1.0
 #define DEFAULT_MAX_LRU		128
 #define DEFAULT_DNS			TRUE
+#define DEFAULT_TIMEOUT_MS	5000
+#define DEFAULT_FIRST_TTL	1
+#define DEFAULT_MAX_HOPS	30
+#define DEFAULT_TOS			-1
+#define DEFAULT_BITPATTERN	-1
 
 #define SAVED_PINGS 100
 #define MaxHost 256
@@ -84,7 +89,7 @@
 #define IP_HEADER_LENGTH   20
 
 
-#define MTR_NR_COLS 9
+#define MTR_NR_COLS 11
 
 const char MTR_COLS[ MTR_NR_COLS ][10] = {
 	"Hostname",
@@ -92,14 +97,16 @@ const char MTR_COLS[ MTR_NR_COLS ][10] = {
 	"Loss %",
 	"Sent",
 	"Recv",
+	"Last",
+	"Avg",
 	"Best",
-	"Avrg",
 	"Worst",
-	"Last"
+	"StDev",
+	"Jttr"
 };
 
 const int MTR_COL_LENGTH[ MTR_NR_COLS ] = {
-	249, 30, 50, 40, 40, 50, 50, 50, 50
+	220, 30, 50, 40, 40, 50, 50, 50, 50, 50, 50
 };
 
 int gettimeofday(struct timeval* tv, struct timezone* tz);

@@ -87,9 +87,11 @@ struct Options {
     bool xmlMode = false;
     bool cursesMode = false;
     bool gtkMode = false;
+    bool mpls = false;
     bool ipv4Only = false;
     bool ipv6Only = false;
     int ipinfoMode = 0;
+    int displayMode = -1;
     std::string order = "LRS N BAWV";
     std::string interfaceName;
     std::string bindAddress;
@@ -1740,8 +1742,8 @@ int main(int argc, char** argv) {
             continue;
         }
         if (arg == "-e" || arg == "--mpls") {
-            std::cerr << "Option not supported yet: " << arg << "\n";
-            return 1;
+            options.mpls = true;
+            continue;
         }
         if (arg == "-Z" || arg == "--timeout") {
             std::string value;
@@ -1809,6 +1811,12 @@ int main(int argc, char** argv) {
                 std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.displayMode = parsed;
             continue;
         }
 
@@ -1854,11 +1862,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (options.cursesMode || options.gtkMode) {
-        std::cerr << "Requested UI mode not supported yet.\n";
-        return 1;
-    }
-
     std::vector<std::string> warnings;
     if (options.mode == "sctp") {
         warnings.emplace_back("SCTP probing not supported yet; using ICMP.");
@@ -1887,6 +1890,15 @@ int main(int argc, char** argv) {
     }
     if (!options.interfaceName.empty() || options.mark >= 0) {
         warnings.emplace_back("Interface/mark options are not supported yet; ignoring.");
+    }
+    if (options.cursesMode || options.gtkMode) {
+        warnings.emplace_back("Requested UI mode not supported; using standard output.");
+    }
+    if (options.mpls) {
+        warnings.emplace_back("MPLS extensions not supported yet; ignoring.");
+    }
+    if (options.displayMode >= 0) {
+        warnings.emplace_back("Display mode is not supported yet; ignoring.");
     }
     if (options.maxUnknown != 5) {
         warnings.emplace_back("max-unknown is not supported yet; ignoring.");
