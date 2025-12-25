@@ -83,6 +83,72 @@ static std::string EscapeCsvField(const char* input)
 	return out;
 }
 
+static const char* IpinfoLabel(int mode)
+{
+	switch(mode) {
+	case 1: return "Prefix";
+	case 2: return "Country";
+	case 3: return "Registry";
+	case 4: return "Allocated";
+	case 0:
+	default: return "ASN";
+	}
+}
+
+static const char* OrderLabel(char code)
+{
+	switch(code) {
+	case 'L': return "Loss %";
+	case 'D': return "Drop";
+	case 'R': return "Recv";
+	case 'S': return "Sent";
+	case 'N': return "Last";
+	case 'B': return "Best";
+	case 'A': return "Avg";
+	case 'W': return "Wrst";
+	case 'V': return "StDev";
+	case 'G': return "Gmean";
+	case 'J': return "Jttr";
+	case 'M': return "Javg";
+	case 'X': return "Jmax";
+	case 'I': return "Jint";
+	default: return "";
+	}
+}
+
+static const char* IpinfoLabel(int mode)
+{
+	switch(mode) {
+	case 0: return "ASN";
+	case 1: return "Prefix";
+	case 2: return "Country";
+	case 3: return "Registry";
+	case 4: return "Allocated";
+	default: return "ASN";
+	}
+}
+
+static const char* OrderLabel(char code)
+{
+	switch(code) {
+	case 'L': return "Loss %";
+	case 'D': return "Drop";
+	case 'R': return "Recv";
+	case 'S': return "Sent";
+	case 'N': return "Last";
+	case 'B': return "Best";
+	case 'A': return "Avg";
+	case 'W': return "Wrst";
+	case 'V': return "StDev";
+	case 'G': return "Gmean";
+	case 'J': return "Jttr";
+	case 'M': return "Javg";
+	case 'X': return "Jmax";
+	case 'I': return "Jint";
+	default: return "";
+	}
+}
+
 //*****************************************************************************
 // BEGIN_MESSAGE_MAP
 //
