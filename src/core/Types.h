@@ -15,6 +15,7 @@
 #include <variant>
 #include <array>
 #include <cstdint>
+#include <cmath>
 
 namespace mtr {
 
@@ -97,6 +98,16 @@ struct HopStatistics {
     Milliseconds bestRTT{Milliseconds::max()}; ///< Best (minimum) RTT
     Milliseconds worstRTT{0};               ///< Worst (maximum) RTT
     Milliseconds totalRTT{0};               ///< Sum of all RTTs (for average)
+    double rttMeanMs{0.0};                  ///< Running mean RTT (ms)
+    double rttM2{0.0};                      ///< Running variance accumulator
+    double rttLogSum{0.0};                  ///< Sum of log RTTs (ms)
+    uint32_t rttLogSamples{0};              ///< Samples used for geo mean
+    double prevRTTMs{0.0};                  ///< Previous RTT (ms)
+    bool hasPrevRTT{false};                 ///< Has previous RTT?
+    double jitterCurrentMs{0.0};            ///< Current jitter (ms)
+    double jitterMeanMs{0.0};               ///< Mean jitter (ms)
+    double jitterMaxMs{0.0};                ///< Worst jitter (ms)
+    uint32_t jitterSamples{0};              ///< Number of jitter samples
 
     /// Calculate packet loss percentage (0.0 - 100.0)
     [[nodiscard]] double packetLossPercent() const noexcept {
@@ -110,13 +121,67 @@ struct HopStatistics {
         return totalRTT / packetsReceived;
     }
 
+    /// Calculate standard deviation (ms)
+    [[nodiscard]] double stdDevMs() const noexcept {
+        if (packetsReceived < 2) return 0.0;
+        return std::sqrt(rttM2 / static_cast<double>(packetsReceived - 1));
+    }
+
+    /// Calculate geometric mean RTT (ms)
+    [[nodiscard]] double geoMeanMs() const noexcept {
+        if (rttLogSamples == 0) return 0.0;
+        return std::exp(rttLogSum / static_cast<double>(rttLogSamples));
+    }
+
+    /// Get current jitter (ms)
+    [[nodiscard]] double currentJitterMs() const noexcept {
+        return jitterCurrentMs;
+    }
+
+    /// Get average jitter (ms)
+    [[nodiscard]] double averageJitterMs() const noexcept {
+        if (jitterSamples == 0) return 0.0;
+        return jitterMeanMs;
+    }
+
+    /// Get worst jitter (ms)
+    [[nodiscard]] double worstJitterMs() const noexcept {
+        return jitterMaxMs;
+    }
+
+    /// Get interarrival jitter (ms) - approximated as average jitter
+    [[nodiscard]] double interarrivalJitterMs() const noexcept {
+        return averageJitterMs();
+    }
+
     /// Update statistics with new RTT measurement
     void updateRTT(Milliseconds rtt) noexcept {
+        const double rttMs = static_cast<double>(rtt.count());
+        ++packetsReceived;
         lastRTT = rtt;
         totalRTT += rtt;
         bestRTT = std::min(bestRTT, rtt);
         worstRTT = std::max(worstRTT, rtt);
-        ++packetsReceived;
+
+        const double delta = rttMs - rttMeanMs;
+        rttMeanMs += delta / static_cast<double>(packetsReceived);
+        const double delta2 = rttMs - rttMeanMs;
+        rttM2 += delta * delta2;
+        if (rttMs > 0.0) {
+            rttLogSum += std::log(rttMs);
+            ++rttLogSamples;
+        }
+
+        if (hasPrevRTT) {
+            const double jitter = std::fabs(rttMs - prevRTTMs);
+            jitterCurrentMs = jitter;
+            ++jitterSamples;
+            const double jitterDelta = jitter - jitterMeanMs;
+            jitterMeanMs += jitterDelta / static_cast<double>(jitterSamples);
+            jitterMaxMs = std::max(jitterMaxMs, jitter);
+        }
+        prevRTTMs = rttMs;
+        hasPrevRTT = true;
     }
 };
 
@@ -127,6 +192,7 @@ struct HopStatistics {
 /// Configuration for MTR trace
 struct TraceConfig {
     NetworkAddress destination;             ///< Target to trace
+    uint16_t firstHop{1};                   ///< Starting TTL
     uint16_t maxHops{30};                   ///< Maximum TTL
     uint16_t pingSize{64};                  ///< ICMP payload size (bytes)
     Milliseconds pingInterval{1000};        ///< Interval between pings

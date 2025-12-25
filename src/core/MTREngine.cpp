@@ -62,7 +62,8 @@ bool MTREngine::start(const TraceConfig& config) {
     }
 
     // Validate configuration
-    if (config.maxHops == 0 || config.maxHops > 255) {
+    if (config.maxHops == 0 || config.maxHops > 255 || config.firstHop == 0 ||
+        config.firstHop > config.maxHops) {
         return false;
     }
 
@@ -138,7 +139,9 @@ void MTREngine::workerThreadFunc(TraceConfig config) {
 
     while (!stopRequested_.load(std::memory_order_acquire)) {
         // Ping each hop up to max or destination
-        for (uint8_t ttl = 1; ttl <= config.maxHops; ++ttl) {
+        for (uint8_t ttl = static_cast<uint8_t>(config.firstHop);
+             ttl <= config.maxHops;
+             ++ttl) {
             if (stopRequested_.load(std::memory_order_acquire)) {
                 break;
             }

@@ -11,17 +11,22 @@
 #include "Types.h"
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <condition_variable>
 #include <csignal>
 #include <cmath>
 #include <cerrno>
 #include <cstring>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <ctime>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -52,14 +57,38 @@ namespace {
 
 struct Options {
     std::string host;
-    int count = 5;
+    std::vector<std::string> hostList;
+    int count = 10;
+    int firstTtl = 1;
     int maxHops = 30;
     int intervalMs = 1000;
     int timeoutMs = 5000;
+    int graceTimeMs = 5000;
     int payloadSize = 64;
+    int bitPattern = -1;
+    int tos = -1;
+    int port = -1;
+    int localPort = -1;
+    int mark = -1;
+    int maxUnknown = 5;
     bool resolveDNS = true;
     bool resolveASN = true;
+    bool showIps = false;
+    bool reportMode = false;
+    bool reportWide = false;
+    bool splitMode = false;
+    bool rawMode = false;
+    bool csvMode = false;
+    bool jsonMode = false;
+    bool xmlMode = false;
+    bool cursesMode = false;
+    bool gtkMode = false;
+    bool ipv4Only = false;
+    bool ipv6Only = false;
     int ipinfoMode = 0;
+    std::string order = "LRS N BAWV";
+    std::string interfaceName;
+    std::string bindAddress;
     std::string mode = "icmp";
 };
 
@@ -74,20 +103,47 @@ void handleSignal(int) {
 
 void printUsage(const char* argv0) {
     std::cout
-        << "Uso: " << argv0 << " <host> [opcoes]\n"
-        << "Opcoes:\n"
-        << "  --count N        Numero de rodadas (padrao: 5)\n"
-        << "  --max-hops N     Maximo de hops (padrao: 30)\n"
-        << "  --interval MS   Intervalo entre rodadas (padrao: 1000)\n"
-        << "  --timeout MS    Timeout por echo (padrao: 5000)\n"
-        << "  --size BYTES    Tamanho do payload ICMP (padrao: 64)\n"
-        << "  --mode MODE     Modo de trace: icmp ou udp (padrao: icmp)\n"
-        << "  --udp           Atalho para --mode udp\n"
-        << "  --no-dns        Nao resolver DNS\n"
-        << "  --no-asn        Nao resolver ASN\n"
-        << "  -z, --aslookup  Mostrar ASN (equivalente a --ipinfo 0)\n"
-        << "  -y, --ipinfo N  Mostrar IP info (0=ASN,1=Prefix,2=CC,3=RIR,4=Data)\n"
-        << "  -h, --help      Mostrar esta ajuda\n";
+        << "Usage:\n"
+        << " " << argv0 << " [options] hostname\n\n"
+        << " -F, --filename FILE        read hostname(s) from a file\n"
+        << " -4                         use IPv4 only\n"
+        << " -6                         use IPv6 only\n"
+        << " -u, --udp                  use UDP instead of ICMP echo\n"
+        << " -T, --tcp                  use TCP instead of ICMP echo\n"
+        << " -S, --sctp                 use SCTP instead of ICMP echo\n"
+        << " -I, --interface NAME       use named network interface\n"
+        << " -a, --address ADDRESS      bind the outgoing socket to ADDRESS\n"
+        << " -f, --first-ttl NUMBER     set what TTL to start\n"
+        << " -m, --max-ttl NUMBER       maximum number of hops\n"
+        << " -U, --max-unknown NUMBER   maximum unknown host\n"
+        << " -P, --port PORT            target port number for TCP, SCTP, or UDP\n"
+        << " -L, --localport LOCALPORT  source port number for UDP\n"
+        << " -s, --psize PACKETSIZE     set the packet size used for probing\n"
+        << " -B, --bitpattern NUMBER    set bit pattern to use in payload\n"
+        << " -i, --interval SECONDS     ICMP echo request interval\n"
+        << " -G, --gracetime SECONDS    number of seconds to wait for responses\n"
+        << " -Q, --tos NUMBER           type of service field in IP header\n"
+        << " -e, --mpls                 display information from ICMP extensions\n"
+        << " -Z, --timeout SECONDS      seconds to keep probe sockets open\n"
+        << " -M, --mark MARK            mark each sent packet\n"
+        << " -r, --report               output using report mode\n"
+        << " -w, --report-wide          output wide report\n"
+        << " -c, --report-cycles COUNT  set the number of pings sent\n"
+        << " -j, --json                 output json\n"
+        << " -x, --xml                  output xml\n"
+        << " -C, --csv                  output comma separated values\n"
+        << " -l, --raw                  output raw format\n"
+        << " -p, --split                split output\n"
+        << " -t, --curses               use curses terminal interface\n"
+        << "     --displaymode MODE     select initial display mode\n"
+        << " -g, --gtk                  use GTK+ xwindow interface\n"
+        << " -n, --no-dns               do not resolve host names\n"
+        << " -b, --show-ips             show IP numbers and host names\n"
+        << " -o, --order FIELDS         select output fields\n"
+        << " -y, --ipinfo NUMBER        select IP information in output\n"
+        << " -z, --aslookup             display AS number\n"
+        << " -h, --help                 display this help and exit\n"
+        << " -v, --version              output version information and exit\n";
 }
 
 bool parseInt(const std::string& value, int& out) {
@@ -103,17 +159,116 @@ bool parseInt(const std::string& value, int& out) {
     return true;
 }
 
-bool readOptionValue(int argc, char** argv, int& i, std::string& out) {
-    const std::string arg = argv[i];
+bool parseDouble(const std::string& value, double& out) {
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    double parsed = std::strtod(value.c_str(), &end);
+    if (!end || *end != '\0') {
+        return false;
+    }
+    out = parsed;
+    return true;
+}
+
+bool readOptionValue(const std::vector<std::string>& args, size_t& i, std::string& out) {
+    const std::string& arg = args[i];
     const auto eq = arg.find('=');
     if (eq != std::string::npos) {
         out = arg.substr(eq + 1);
         return true;
     }
-    if (i + 1 >= argc) {
+    if (i + 1 >= args.size()) {
         return false;
     }
-    out = argv[++i];
+    out = args[++i];
+    return true;
+}
+
+std::vector<std::string> tokenizeOptions(const std::string& input) {
+    std::vector<std::string> tokens;
+    std::string current;
+    bool inSingle = false;
+    bool inDouble = false;
+    bool escape = false;
+
+    for (char ch : input) {
+        if (escape) {
+            current.push_back(ch);
+            escape = false;
+            continue;
+        }
+        if (ch == '\\') {
+            escape = true;
+            continue;
+        }
+        if (inSingle) {
+            if (ch == '\'') {
+                inSingle = false;
+            } else {
+                current.push_back(ch);
+            }
+            continue;
+        }
+        if (inDouble) {
+            if (ch == '"') {
+                inDouble = false;
+            } else {
+                current.push_back(ch);
+            }
+            continue;
+        }
+        if (ch == '\'') {
+            inSingle = true;
+            continue;
+        }
+        if (ch == '"') {
+            inDouble = true;
+            continue;
+        }
+        if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+            continue;
+        }
+        current.push_back(ch);
+    }
+
+    if (!current.empty()) {
+        tokens.push_back(current);
+    }
+    return tokens;
+}
+
+std::string trimString(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() &&
+           std::isspace(static_cast<unsigned char>(value[start])) != 0) {
+        ++start;
+    }
+    size_t end = value.size();
+    while (end > start &&
+           std::isspace(static_cast<unsigned char>(value[end - 1])) != 0) {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
+bool loadHostsFromFile(const std::string& path, std::vector<std::string>& hosts) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return false;
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::string trimmed = trimString(line);
+        if (!trimmed.empty() && trimmed[0] != '#') {
+            hosts.push_back(trimmed);
+        }
+    }
     return true;
 }
 
@@ -135,13 +290,22 @@ std::optional<mtr::NetworkAddress> parseLiteralAddress(const std::string& host) 
     return std::nullopt;
 }
 
-std::optional<mtr::NetworkAddress> resolveHost(const std::string& host) {
+std::optional<mtr::NetworkAddress> resolveHost(const std::string& host, int family) {
     if (auto literal = parseLiteralAddress(host)) {
-        return literal;
+        if (family == AF_UNSPEC) {
+            return literal;
+        }
+        if (family == AF_INET && std::holds_alternative<mtr::IPv4Address>(*literal)) {
+            return literal;
+        }
+        if (family == AF_INET6 && std::holds_alternative<mtr::IPv6Address>(*literal)) {
+            return literal;
+        }
+        return std::nullopt;
     }
 
     addrinfo hints{};
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = family;
     hints.ai_socktype = SOCK_DGRAM;
 
     addrinfo* result = nullptr;
@@ -355,9 +519,437 @@ std::string ipinfoValue(const mtr::HopStatistics& hop, int mode, bool asnEnabled
     }
 }
 
+std::string fitColumn(const std::string& value, size_t width);
+
+std::string formatRttValue(double value) {
+    if (value <= 0.0) {
+        return "?";
+    }
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1) << value;
+    return oss.str();
+}
+
+std::string formatLossPercent(double loss) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1) << loss << "%";
+    return oss.str();
+}
+
+std::string formatCount(uint32_t value) {
+    return std::to_string(value);
+}
+
+std::string escapeJson(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (char ch : value) {
+        switch (ch) {
+            case '\\': out += "\\\\"; break;
+            case '"': out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                out += ch;
+        }
+    }
+    return out;
+}
+
+std::string escapeXml(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (char ch : value) {
+        switch (ch) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            case '\'': out += "&apos;"; break;
+            default:
+                out += ch;
+        }
+    }
+    return out;
+}
+
+std::string resolveHostname(const mtr::NetworkAddress& addr,
+                            std::unordered_map<std::string, std::string>& cache) {
+    const std::string key = addressToString(addr);
+    auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+
+    char host[NI_MAXHOST]{};
+    int result = EAI_FAIL;
+    if (const auto* ipv4 = std::get_if<mtr::IPv4Address>(&addr)) {
+        sockaddr_in sa{};
+        sa.sin_family = AF_INET;
+        std::memcpy(&sa.sin_addr.s_addr, ipv4->bytes.data(), ipv4->bytes.size());
+        result = getnameinfo(reinterpret_cast<sockaddr*>(&sa), sizeof(sa), host, sizeof(host), nullptr, 0, 0);
+    } else if (const auto* ipv6 = std::get_if<mtr::IPv6Address>(&addr)) {
+        sockaddr_in6 sa6{};
+        sa6.sin6_family = AF_INET6;
+        std::memcpy(&sa6.sin6_addr.s6_addr, ipv6->bytes.data(), ipv6->bytes.size());
+        result = getnameinfo(reinterpret_cast<sockaddr*>(&sa6), sizeof(sa6), host, sizeof(host), nullptr, 0, 0);
+    }
+
+    std::string resolved;
+    if (result == 0) {
+        resolved = host;
+    }
+    cache[key] = resolved;
+    return resolved;
+}
+
+bool isValidOrderField(char code) {
+    switch (code) {
+        case 'L': case 'D': case 'R': case 'S':
+        case 'N': case 'B': case 'A': case 'W':
+        case 'V': case 'G': case 'J': case 'M':
+        case 'X': case 'I':
+            return true;
+        default:
+            return false;
+    }
+}
+
+std::vector<char> parseOrderFields(const std::string& order) {
+    std::vector<char> fields;
+    for (char ch : order) {
+        if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+            continue;
+        }
+        char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        if (isValidOrderField(upper)) {
+            fields.push_back(upper);
+        }
+    }
+    if (fields.empty()) {
+        fields = {'L', 'R', 'S', 'N', 'B', 'A', 'W', 'V'};
+    }
+    return fields;
+}
+
+std::string formatOrderValue(char code, const mtr::HopStatistics& hop) {
+    const uint32_t sent = hop.packetsSent;
+    const uint32_t received = hop.packetsReceived;
+    const uint32_t dropped = (sent >= received) ? (sent - received) : 0;
+    const double loss = hop.packetLossPercent();
+
+    switch (code) {
+        case 'L':
+            return formatLossPercent(loss);
+        case 'D':
+            return formatCount(dropped);
+        case 'R':
+            return formatCount(received);
+        case 'S':
+            return formatCount(sent);
+        case 'N':
+            return (received > 0) ? formatRttValue(static_cast<double>(hop.lastRTT.count())) : "?";
+        case 'B':
+            return (received > 0) ? formatRttValue(static_cast<double>(hop.bestRTT.count())) : "?";
+        case 'A':
+            return (received > 0) ? formatRttValue(static_cast<double>(hop.averageRTT().count())) : "?";
+        case 'W':
+            return (received > 0) ? formatRttValue(static_cast<double>(hop.worstRTT.count())) : "?";
+        case 'V':
+            return (received > 1) ? formatRttValue(hop.stdDevMs()) : "?";
+        case 'G':
+            return (received > 0) ? formatRttValue(hop.geoMeanMs()) : "?";
+        case 'J':
+            return (received > 1) ? formatRttValue(hop.currentJitterMs()) : "?";
+        case 'M':
+            return (received > 1) ? formatRttValue(hop.averageJitterMs()) : "?";
+        case 'X':
+            return (received > 1) ? formatRttValue(hop.worstJitterMs()) : "?";
+        case 'I':
+            return (received > 1) ? formatRttValue(hop.interarrivalJitterMs()) : "?";
+        default:
+            return "?";
+    }
+}
+
+std::string orderLabel(char code) {
+    switch (code) {
+        case 'L': return "Loss%";
+        case 'D': return "Drop";
+        case 'R': return "Rcv";
+        case 'S': return "Snt";
+        case 'N': return "Last";
+        case 'B': return "Best";
+        case 'A': return "Avg";
+        case 'W': return "Wrst";
+        case 'V': return "StDev";
+        case 'G': return "Gmean";
+        case 'J': return "Jttr";
+        case 'M': return "Javg";
+        case 'X': return "Jmax";
+        case 'I': return "Jint";
+        default: return "?";
+    }
+}
+
+std::string hopHostLabel(
+    size_t hopIndex,
+    const mtr::HopStatistics& hop,
+    bool resolveDNS,
+    bool showIps,
+    std::unordered_map<std::string, std::string>& dnsCache) {
+    const std::string addr = (hop.packetsReceived > 0) ? addressToString(hop.address) : "???";
+    if (!resolveDNS || addr == "???" || !showIps) {
+        std::string name = addr;
+        if (resolveDNS && addr != "???") {
+            const std::string resolved = resolveHostname(hop.address, dnsCache);
+            if (!resolved.empty() && !showIps) {
+                name = resolved;
+            }
+        }
+        return std::to_string(hopIndex + 1) + ". " + name;
+    }
+
+    const std::string resolved = resolveDNS ? resolveHostname(hop.address, dnsCache) : "";
+    if (resolved.empty() || resolved == addr) {
+        return std::to_string(hopIndex + 1) + ". " + addr;
+    }
+    return std::to_string(hopIndex + 1) + ". " + resolved + " (" + addr + ")";
+}
+
+void printReport(
+    const mtr::TraceResult& result,
+    const Options& options,
+    const std::vector<char>& fields,
+    int ipinfoMode,
+    bool asnEnabled) {
+    std::unordered_map<std::string, std::string> dnsCache;
+    std::vector<std::string> hostLabels;
+    std::vector<std::vector<std::string>> values;
+
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        hostLabels.push_back(hopHostLabel(i, hop, options.resolveDNS, options.showIps, dnsCache));
+
+        std::vector<std::string> row;
+        row.reserve(fields.size());
+        for (char field : fields) {
+            row.push_back(formatOrderValue(field, hop));
+        }
+        if (options.resolveASN && asnEnabled) {
+            row.push_back(ipinfoValue(hop, ipinfoMode, asnEnabled));
+        }
+        values.push_back(std::move(row));
+    }
+
+    size_t hostWidth = 4;
+    for (const auto& label : hostLabels) {
+        hostWidth = std::max(hostWidth, label.size());
+    }
+    if (!options.reportWide) {
+        hostWidth = std::min<size_t>(hostWidth, 40);
+    }
+
+    std::vector<size_t> widths(fields.size());
+    for (size_t i = 0; i < fields.size(); ++i) {
+        widths[i] = orderLabel(fields[i]).size();
+    }
+    size_t ipinfoWidth = 0;
+    if (options.resolveASN && asnEnabled) {
+        ipinfoWidth = ipinfoLabel(ipinfoMode, asnEnabled).size();
+    }
+
+    for (const auto& row : values) {
+        for (size_t i = 0; i < fields.size(); ++i) {
+            widths[i] = std::max(widths[i], row[i].size());
+        }
+        if (options.resolveASN && asnEnabled && !row.empty()) {
+            ipinfoWidth = std::max(ipinfoWidth, row.back().size());
+        }
+    }
+
+    std::cout << "HOST: " << options.host << "\n";
+    std::cout << std::left << std::setw(static_cast<int>(hostWidth)) << "Host" << " ";
+    for (size_t i = 0; i < fields.size(); ++i) {
+        std::cout << std::right << std::setw(static_cast<int>(widths[i])) << orderLabel(fields[i]) << " ";
+    }
+    if (options.resolveASN && asnEnabled) {
+        std::cout << std::right << std::setw(static_cast<int>(ipinfoWidth)) << ipinfoLabel(ipinfoMode, asnEnabled) << " ";
+    }
+    std::cout << "\n";
+
+    for (size_t rowIndex = 0; rowIndex < values.size(); ++rowIndex) {
+        const std::string host = options.reportWide ? hostLabels[rowIndex] : fitColumn(hostLabels[rowIndex], hostWidth);
+        std::cout << std::left << std::setw(static_cast<int>(hostWidth)) << host << " ";
+        for (size_t i = 0; i < fields.size(); ++i) {
+            std::cout << std::right << std::setw(static_cast<int>(widths[i])) << values[rowIndex][i] << " ";
+        }
+        if (options.resolveASN && asnEnabled) {
+            std::cout << std::right << std::setw(static_cast<int>(ipinfoWidth)) << values[rowIndex].back() << " ";
+        }
+        std::cout << "\n";
+    }
+}
+
+long long unixTimestamp() {
+    return static_cast<long long>(std::time(nullptr));
+}
+
+void printJsonReport(
+    const mtr::TraceResult& result,
+    const Options& options,
+    const std::vector<char>& fields,
+    int ipinfoMode,
+    bool asnEnabled) {
+    std::unordered_map<std::string, std::string> dnsCache;
+
+    std::cout << "{\n";
+    std::cout << "  \"host\": \"" << escapeJson(options.host) << "\",\n";
+    std::cout << "  \"timestamp\": " << unixTimestamp() << ",\n";
+    std::cout << "  \"fields\": [";
+    for (size_t i = 0; i < fields.size(); ++i) {
+        std::cout << "\"" << fields[i] << "\"";
+        if (i + 1 < fields.size()) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "],\n";
+    std::cout << "  \"hops\": [\n";
+
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+    bool firstHop = true;
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        if (!firstHop) {
+            std::cout << ",\n";
+        }
+        firstHop = false;
+        const std::string hostLabel = hopHostLabel(i, hop, options.resolveDNS, options.showIps, dnsCache);
+        const std::string addr = (hop.packetsReceived > 0) ? addressToString(hop.address) : "";
+
+        std::cout << "    {\n";
+        std::cout << "      \"count\": " << (i + 1) << ",\n";
+        std::cout << "      \"host\": \"" << escapeJson(hostLabel) << "\",\n";
+        std::cout << "      \"ip\": \"" << escapeJson(addr) << "\",\n";
+        std::cout << "      \"values\": [";
+        for (size_t f = 0; f < fields.size(); ++f) {
+            std::cout << "\"" << formatOrderValue(fields[f], hop) << "\"";
+            if (f + 1 < fields.size()) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << "]";
+        if (options.resolveASN && asnEnabled) {
+            std::cout << ",\n      \"ipinfo\": \"" << escapeJson(ipinfoValue(hop, ipinfoMode, asnEnabled)) << "\"\n";
+            std::cout << "    }";
+        } else {
+            std::cout << "\n    }";
+        }
+    }
+    std::cout << "\n  ]\n";
+    std::cout << "}\n";
+}
+
+void printXmlReport(
+    const mtr::TraceResult& result,
+    const Options& options,
+    const std::vector<char>& fields,
+    int ipinfoMode,
+    bool asnEnabled) {
+    std::unordered_map<std::string, std::string> dnsCache;
+
+    std::cout << "<mtr host=\"" << escapeXml(options.host) << "\" timestamp=\"" << unixTimestamp() << "\">\n";
+    std::cout << "  <fields>";
+    for (char field : fields) {
+        std::cout << field;
+    }
+    std::cout << "</fields>\n";
+
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        const std::string hostLabel = hopHostLabel(i, hop, options.resolveDNS, options.showIps, dnsCache);
+        const std::string addr = (hop.packetsReceived > 0) ? addressToString(hop.address) : "";
+        std::cout << "  <hop count=\"" << (i + 1) << "\" host=\"" << escapeXml(hostLabel)
+                  << "\" ip=\"" << escapeXml(addr) << "\">\n";
+        std::cout << "    <values>";
+        for (char field : fields) {
+            std::cout << "<value code=\"" << field << "\">" << formatOrderValue(field, hop) << "</value>";
+        }
+        std::cout << "</values>\n";
+        if (options.resolveASN && asnEnabled) {
+            std::cout << "    <ipinfo>" << escapeXml(ipinfoValue(hop, ipinfoMode, asnEnabled)) << "</ipinfo>\n";
+        }
+        std::cout << "  </hop>\n";
+    }
+    std::cout << "</mtr>\n";
+}
+
+void printCsvReport(
+    const mtr::TraceResult& result,
+    const Options& options) {
+    std::unordered_map<std::string, std::string> dnsCache;
+    const long long timestamp = unixTimestamp();
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        const std::string hostLabel = hopHostLabel(i, hop, options.resolveDNS, options.showIps, dnsCache);
+        const double avg = (hop.packetsReceived > 0)
+            ? static_cast<double>(hop.averageRTT().count())
+            : 0.0;
+    std::cout << "MTR.0.95;" << timestamp << ";OK;" << options.host << ";"
+                  << (i + 1) << ";" << hostLabel << ";" << static_cast<long long>(avg) << "\n";
+    }
+}
+
+void printRawReport(
+    const mtr::TraceResult& result,
+    const Options& options) {
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        const std::string addr = (hop.packetsReceived > 0) ? addressToString(hop.address) : "???";
+        std::cout << "h " << i << " " << addr << "\n";
+        if (hop.packetsReceived > 0) {
+            std::cout << "p " << i << " " << hop.lastRTT.count() << "\n";
+        }
+    }
+}
+
+void printSplitReport(
+    const mtr::TraceResult& result,
+    const Options& options,
+    int ipinfoMode,
+    bool asnEnabled) {
+    std::unordered_map<std::string, std::string> dnsCache;
+    const size_t startIndex = (options.firstTtl > 0) ? static_cast<size_t>(options.firstTtl - 1) : 0;
+
+    for (size_t i = startIndex; i < result.hops.size(); ++i) {
+        const auto& hop = result.hops[i];
+        const std::string hostLabel = hopHostLabel(i, hop, options.resolveDNS, options.showIps, dnsCache);
+        std::cout
+            << (i + 1) << " "
+            << hostLabel << " "
+            << formatLossPercent(hop.packetLossPercent()) << " "
+            << hop.packetsSent << " "
+            << hop.packetsReceived << " "
+            << formatRttValue(static_cast<double>(hop.lastRTT.count())) << " "
+            << formatRttValue(static_cast<double>(hop.averageRTT().count())) << " "
+            << formatRttValue(static_cast<double>(hop.bestRTT.count())) << " "
+            << formatRttValue(static_cast<double>(hop.worstRTT.count()));
+        if (options.resolveASN && asnEnabled) {
+            std::cout << " " << ipinfoValue(hop, ipinfoMode, asnEnabled);
+        }
+        std::cout << "\n";
+    }
+}
+
 void printHeader(int round, int ipinfoMode, bool asnEnabled) {
-    std::cout << "\nRodada " << round << "\n";
-    std::cout << "Hop  Loss%   Snt   Rcv  Last  Avg   Best  Wrst  Endereco           "
+    std::cout << "\nRound " << round << "\n";
+    std::cout << "Hop  Loss%   Snt   Rcv  Last  Avg   Best  Wrst  Address            "
               << ipinfoLabel(ipinfoMode, asnEnabled) << "\n";
     std::cout << "---- ----- ----- ----- ----- ----- ----- ----- ------------------ ------------------------\n";
 }
@@ -418,13 +1010,13 @@ void printHopLine(size_t index, const mtr::HopStatistics& hop, int ipinfoMode, b
 bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
-        std::cerr << "Falha ao criar socket UDP: " << std::strerror(errno) << "\n";
+        std::cerr << "Failed to create UDP socket: " << std::strerror(errno) << "\n";
         return false;
     }
 
     int on = 1;
     if (setsockopt(sock, SOL_IP, IP_RECVERR, &on, sizeof(on)) != 0) {
-        std::cerr << "Falha ao habilitar IP_RECVERR: " << std::strerror(errno) << "\n";
+        std::cerr << "Failed to enable IP_RECVERR: " << std::strerror(errno) << "\n";
         close(sock);
         return false;
     }
@@ -450,7 +1042,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
         printHeader(round, g_ipinfoMode.load(), g_asnEnabled.load());
         const int hopLimit = (finalHop > 0) ? finalHop : options.maxHops;
 
-        for (int ttl = 1; ttl <= hopLimit; ++ttl) {
+        for (int ttl = options.firstTtl; ttl <= hopLimit; ++ttl) {
             if (g_interrupted.load()) {
                 break;
             }
@@ -460,7 +1052,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
 
             int ttlVal = ttl;
             if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ttlVal, sizeof(ttlVal)) != 0) {
-                std::cerr << "Falha ao definir TTL: " << std::strerror(errno) << "\n";
+                std::cerr << "Failed to set TTL: " << std::strerror(errno) << "\n";
                 close(sock);
                 return false;
             }
@@ -574,6 +1166,224 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
 }
 #endif
 
+#if defined(_WIN32)
+bool parseIcmpTimeExceeded(
+    const std::vector<uint8_t>& buffer,
+    uint16_t expectedPort) {
+    if (buffer.size() < 28) {
+        return false;
+    }
+    const uint8_t* data = buffer.data();
+    const uint8_t ipHeaderLen = static_cast<uint8_t>((data[0] & 0x0F) * 4);
+    if (buffer.size() < ipHeaderLen + 8) {
+        return false;
+    }
+    const uint8_t icmpType = data[ipHeaderLen];
+    if (icmpType != 11 && icmpType != 3) {
+        return false;
+    }
+    const uint8_t* innerIp = data + ipHeaderLen + 8;
+    if (innerIp + 20 > data + buffer.size()) {
+        return false;
+    }
+    const uint8_t innerHeaderLen = static_cast<uint8_t>((innerIp[0] & 0x0F) * 4);
+    if (innerIp + innerHeaderLen + 8 > data + buffer.size()) {
+        return false;
+    }
+    if (innerIp[9] != IPPROTO_TCP) {
+        return false;
+    }
+    const uint8_t* tcpHeader = innerIp + innerHeaderLen;
+    uint16_t destPortNet = 0;
+    std::memcpy(&destPortNet, tcpHeader + 2, sizeof(destPortNet));
+    const uint16_t destPort = ntohs(destPortNet);
+    if (destPort != expectedPort) {
+        return false;
+    }
+    return true;
+}
+
+bool runTcpTraceWindows(
+    const Options& options,
+    const mtr::IPv4Address& destIPv4,
+    bool reportMode,
+    std::optional<mtr::TraceResult>& outResult) {
+    SOCKET icmpSock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (icmpSock == INVALID_SOCKET) {
+        std::cerr << "Failed to create ICMP socket: " << WSAGetLastError() << "\n";
+        return false;
+    }
+
+    sockaddr_in destAddr{};
+    destAddr.sin_family = AF_INET;
+    destAddr.sin_addr.s_addr = htonl(destIPv4.toUint32());
+
+    const uint16_t destPort = static_cast<uint16_t>((options.port > 0) ? options.port : 80);
+    destAddr.sin_port = htons(destPort);
+
+    std::vector<mtr::HopStatistics> hops(static_cast<size_t>(options.maxHops));
+    mtr::ASNResolver asnResolver;
+    std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
+    std::unordered_map<std::string, mtr::ASNInfo> asnCacheV6;
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> asnLastAttemptV6;
+    int finalHop = -1;
+
+    for (int round = 1; round <= options.count; ++round) {
+        if (g_interrupted.load()) {
+            break;
+        }
+
+        if (!reportMode) {
+            printHeader(round, g_ipinfoMode.load(), g_asnEnabled.load());
+        }
+        const int hopLimit = (finalHop > 0) ? finalHop : options.maxHops;
+
+        for (int ttl = options.firstTtl; ttl <= hopLimit; ++ttl) {
+            if (g_interrupted.load()) {
+                break;
+            }
+
+            auto& hop = hops[static_cast<size_t>(ttl - 1)];
+            ++hop.packetsSent;
+
+            SOCKET tcpSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (tcpSock == INVALID_SOCKET) {
+                if (!reportMode) {
+                    printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
+                }
+                continue;
+            }
+
+            int ttlVal = ttl;
+            setsockopt(tcpSock, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&ttlVal), sizeof(ttlVal));
+
+            u_long nonBlocking = 1;
+            ioctlsocket(tcpSock, FIONBIO, &nonBlocking);
+
+            const auto start = std::chrono::steady_clock::now();
+            connect(tcpSock, reinterpret_cast<sockaddr*>(&destAddr), sizeof(destAddr));
+
+            bool gotReply = false;
+            mtr::NetworkAddress replyAddr{};
+            mtr::Milliseconds rtt{0};
+
+            while (true) {
+                const auto now = std::chrono::steady_clock::now();
+                const auto elapsed = std::chrono::duration_cast<mtr::Milliseconds>(now - start);
+                if (elapsed.count() >= options.timeoutMs) {
+                    break;
+                }
+                const int remainingMs = options.timeoutMs - static_cast<int>(elapsed.count());
+                timeval tv{};
+                tv.tv_sec = remainingMs / 1000;
+                tv.tv_usec = (remainingMs % 1000) * 1000;
+
+                fd_set readfds;
+                fd_set writefds;
+                FD_ZERO(&readfds);
+                FD_ZERO(&writefds);
+                FD_SET(icmpSock, &readfds);
+                FD_SET(tcpSock, &writefds);
+
+                const int ready = select(0, &readfds, &writefds, nullptr, &tv);
+                if (ready <= 0) {
+                    break;
+                }
+
+                if (FD_ISSET(icmpSock, &readfds)) {
+                    std::vector<uint8_t> buffer(512);
+                    sockaddr_in fromAddr{};
+                    int fromLen = sizeof(fromAddr);
+                    const int recvLen = recvfrom(
+                        icmpSock,
+                        reinterpret_cast<char*>(buffer.data()),
+                        static_cast<int>(buffer.size()),
+                        0,
+                        reinterpret_cast<sockaddr*>(&fromAddr),
+                        &fromLen);
+                    if (recvLen > 0) {
+                        buffer.resize(static_cast<size_t>(recvLen));
+                        if (parseIcmpTimeExceeded(buffer, destPort)) {
+                            const auto end = std::chrono::steady_clock::now();
+                            rtt = std::chrono::duration_cast<mtr::Milliseconds>(end - start);
+                            replyAddr = mtr::IPv4Address(ntohl(fromAddr.sin_addr.s_addr));
+                            gotReply = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (FD_ISSET(tcpSock, &writefds)) {
+                    int soError = 0;
+                    int len = sizeof(soError);
+                    getsockopt(tcpSock, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&soError), &len);
+                    const auto end = std::chrono::steady_clock::now();
+                    rtt = std::chrono::duration_cast<mtr::Milliseconds>(end - start);
+                    if (soError == 0 || soError == WSAECONNREFUSED) {
+                        replyAddr = destIPv4;
+                        gotReply = true;
+                        if (finalHop <= 0) {
+                            finalHop = ttl;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            closesocket(tcpSock);
+
+            if (gotReply) {
+                if (hop.address != replyAddr) {
+                    hop.address = replyAddr;
+                    hop.hostname.reset();
+                    hop.asn.reset();
+                }
+                hop.updateRTT(rtt);
+                if (options.resolveASN && g_asnEnabled.load() && !hop.asn) {
+                    auto asnInfo = resolveAsnWithRetry(
+                        asnResolver,
+                        asnCache,
+                        asnLastAttempt,
+                        asnCacheV6,
+                        asnLastAttemptV6,
+                        hop.address);
+                    if (asnInfo) {
+                        hop.asn = *asnInfo;
+                    }
+                }
+            }
+
+            if (!reportMode) {
+                printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
+            }
+        }
+
+        if (g_interrupted.load()) {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(options.intervalMs));
+    }
+
+    closesocket(icmpSock);
+
+    if (reportMode) {
+        mtr::TraceResult result{};
+        result.config.maxHops = static_cast<uint16_t>(options.maxHops);
+        result.config.firstHop = static_cast<uint16_t>(options.firstTtl);
+        result.config.resolveDNS = options.resolveDNS;
+        result.config.resolveASN = options.resolveASN;
+        result.config.pingInterval = mtr::Milliseconds(options.intervalMs);
+        result.config.timeout = mtr::Milliseconds(options.timeoutMs);
+        result.hops = std::move(hops);
+        outResult = std::move(result);
+    }
+
+    return true;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -585,24 +1395,94 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
     WSADATA wsa{};
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        std::cerr << "Falha ao inicializar Winsock.\n";
+        std::cerr << "Failed to initialize Winsock.\n";
         return 1;
     }
 #endif
 
     Options options{};
+    std::vector<std::string> args;
+    if (const char* envOptions = std::getenv("MTR_OPTIONS")) {
+        auto tokens = tokenizeOptions(envOptions);
+        args.insert(args.end(), tokens.begin(), tokens.end());
+    }
     for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
+        args.emplace_back(argv[i]);
+    }
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string& arg = args[i];
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             return 0;
         }
-        if (arg == "--no-dns") {
+        if (arg == "-v" || arg == "--version") {
+            std::cout << "mtr 0.95 (winmtr-redux)\n";
+            return 0;
+        }
+        if (arg == "-4") {
+            options.ipv4Only = true;
+            continue;
+        }
+        if (arg == "-6") {
+            options.ipv6Only = true;
+            continue;
+        }
+        if (arg == "-u" || arg == "--udp") {
+            options.mode = "udp";
+            continue;
+        }
+        if (arg == "-T" || arg == "--tcp") {
+            options.mode = "tcp";
+            continue;
+        }
+        if (arg == "-S" || arg == "--sctp") {
+            options.mode = "sctp";
+            continue;
+        }
+        if (arg == "-r" || arg == "--report") {
+            options.reportMode = true;
+            continue;
+        }
+        if (arg == "-w" || arg == "--report-wide") {
+            options.reportMode = true;
+            options.reportWide = true;
+            continue;
+        }
+        if (arg == "-n" || arg == "--no-dns") {
             options.resolveDNS = false;
             continue;
         }
-        if (arg == "--no-asn") {
-            options.resolveASN = false;
+        if (arg == "-b" || arg == "--show-ips") {
+            options.showIps = true;
+            continue;
+        }
+        if (arg == "-j" || arg == "--json") {
+            options.jsonMode = true;
+            continue;
+        }
+        if (arg == "-x" || arg == "--xml") {
+            options.xmlMode = true;
+            continue;
+        }
+        if (arg == "-C" || arg == "--csv") {
+            options.csvMode = true;
+            continue;
+        }
+        if (arg == "-l" || arg == "--raw") {
+            options.rawMode = true;
+            continue;
+        }
+        if (arg == "-p" || arg == "--split") {
+            options.splitMode = true;
+            continue;
+        }
+        if (arg == "-t" || arg == "--curses") {
+            options.cursesMode = true;
+            continue;
+        }
+        if (arg == "-g" || arg == "--gtk") {
+            options.gtkMode = true;
             continue;
         }
         if (arg == "-z" || arg == "--aslookup") {
@@ -610,189 +1490,547 @@ int main(int argc, char** argv) {
             options.resolveASN = true;
             continue;
         }
-        if (arg == "--udp") {
-            options.mode = "udp";
+        if (arg == "--no-asn") {
+            options.resolveASN = false;
             continue;
         }
         if (arg == "-y" || arg == "--ipinfo") {
             std::string value;
-            if (!readOptionValue(argc, argv, i, value)) {
-                std::cerr << "Opcao invalida: " << arg << "\n";
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
             int parsed = 0;
             if (!parseInt(value, parsed) || parsed < 0 || parsed > 4) {
-                std::cerr << "Opcao invalida: " << arg << "\n";
+                std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
             options.ipinfoMode = parsed;
             options.resolveASN = true;
             continue;
         }
-        if (arg.rfind("--", 0) == 0) {
+        if (arg == "-F" || arg == "--filename") {
             std::string value;
-            if (!readOptionValue(argc, argv, i, value)) {
-                std::cerr << "Opcao invalida: " << arg << "\n";
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            if (!loadHostsFromFile(value, options.hostList)) {
+                std::cerr << "Failed to read host file: " << value << "\n";
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "-I" || arg == "--interface") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.interfaceName = value;
+            continue;
+        }
+        if (arg == "-a" || arg == "--address") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.bindAddress = value;
+            continue;
+        }
+        if (arg == "-f" || arg == "--first-ttl") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
             int parsed = 0;
-            if (arg.rfind("--count", 0) == 0 && parseInt(value, parsed)) {
-                options.count = parsed;
-            } else if (arg.rfind("--max-hops", 0) == 0 && parseInt(value, parsed)) {
-                options.maxHops = parsed;
-            } else if (arg.rfind("--interval", 0) == 0 && parseInt(value, parsed)) {
-                options.intervalMs = parsed;
-            } else if (arg.rfind("--timeout", 0) == 0 && parseInt(value, parsed)) {
-                options.timeoutMs = parsed;
-            } else if (arg.rfind("--size", 0) == 0 && parseInt(value, parsed)) {
-                options.payloadSize = parsed;
-            } else if (arg.rfind("--mode", 0) == 0) {
-                options.mode = value;
-            } else {
-                std::cerr << "Opcao invalida: " << arg << "\n";
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.firstTtl = parsed;
+            continue;
+        }
+        if (arg == "-m" || arg == "--max-ttl" || arg == "--max-hops") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.maxHops = parsed;
+            continue;
+        }
+        if (arg == "-U" || arg == "--max-unknown") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.maxUnknown = parsed;
+            continue;
+        }
+        if (arg == "-P" || arg == "--port") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.port = parsed;
+            continue;
+        }
+        if (arg == "-L" || arg == "--localport") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.localPort = parsed;
+            continue;
+        }
+        if (arg == "-s" || arg == "--psize" || arg == "--size") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.payloadSize = parsed;
+            continue;
+        }
+        if (arg == "-B" || arg == "--bitpattern") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.bitPattern = parsed;
+            continue;
+        }
+        if (arg == "-i" || arg == "--interval") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            double parsed = 0.0;
+            if (!parseDouble(value, parsed) || parsed <= 0.0) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.intervalMs = static_cast<int>(std::round(parsed * 1000.0));
+            continue;
+        }
+        if (arg == "-G" || arg == "--gracetime") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            double parsed = 0.0;
+            if (!parseDouble(value, parsed) || parsed < 0.0) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.graceTimeMs = static_cast<int>(std::round(parsed * 1000.0));
+            continue;
+        }
+        if (arg == "-Q" || arg == "--tos") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.tos = parsed;
+            continue;
+        }
+        if (arg == "-e" || arg == "--mpls") {
+            std::cerr << "Option not supported yet: " << arg << "\n";
+            return 1;
+        }
+        if (arg == "-Z" || arg == "--timeout") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            double parsed = 0.0;
+            if (!parseDouble(value, parsed) || parsed <= 0.0) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.timeoutMs = static_cast<int>(std::round(parsed * 1000.0));
+            continue;
+        }
+        if (arg == "-M" || arg == "--mark") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.mark = parsed;
+            continue;
+        }
+        if (arg == "-o" || arg == "--order") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.order = value;
+            continue;
+        }
+        if (arg == "-c" || arg == "--report-cycles" || arg == "--count") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.count = parsed;
+            continue;
+        }
+        if (arg == "--mode") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
+                return 1;
+            }
+            options.mode = value;
+            continue;
+        }
+        if (arg == "--displaymode") {
+            std::string value;
+            if (!readOptionValue(args, i, value)) {
+                std::cerr << "Invalid option: " << arg << "\n";
                 return 1;
             }
             continue;
         }
+
+        if (!arg.empty() && arg[0] == '-') {
+            std::cerr << "Unknown option: " << arg << "\n";
+            return 1;
+        }
+
         if (options.host.empty()) {
             options.host = arg;
-            continue;
+        } else {
+            options.hostList.push_back(arg);
         }
-        std::cerr << "Argumento desconhecido: " << arg << "\n";
+    }
+
+    if (options.ipv4Only && options.ipv6Only) {
+        std::cerr << "Invalid options: -4 and -6 are mutually exclusive.\n";
         return 1;
     }
 
-    if (options.host.empty()) {
+    if (!options.host.empty()) {
+        options.hostList.insert(options.hostList.begin(), options.host);
+    }
+    if (options.hostList.empty()) {
         printUsage(argv[0]);
         return 1;
     }
 
-    if (options.count <= 0 || options.maxHops <= 0 || options.maxHops > 255 ||
-        options.intervalMs <= 0 || options.timeoutMs <= 0 || options.payloadSize <= 0) {
-        std::cerr << "Parametros invalidos.\n";
+    if (options.jsonMode || options.xmlMode || options.csvMode ||
+        options.rawMode || options.splitMode) {
+        options.reportMode = true;
+    }
+
+    if (options.payloadSize < 0) {
+        std::cerr << "Random packet size is not supported yet.\n";
+        return 1;
+    }
+    if (options.count <= 0 || options.firstTtl <= 0 ||
+        options.maxHops <= 0 || options.maxHops > 255 ||
+        options.firstTtl > options.maxHops ||
+        options.intervalMs <= 0 || options.timeoutMs <= 0 || options.payloadSize == 0) {
+        std::cerr << "Invalid parameters.\n";
         return 1;
     }
 
-    auto destination = resolveHost(options.host);
-    if (!destination) {
-        std::cerr << "Falha ao resolver host: " << options.host << "\n";
+    if (options.cursesMode || options.gtkMode) {
+        std::cerr << "Requested UI mode not supported yet.\n";
         return 1;
     }
 
-    if (options.mode == "udp") {
-#if defined(__linux__)
-        g_asnEnabled.store(options.resolveASN);
-        g_ipinfoMode.store(options.ipinfoMode);
-        g_inputStop.store(false);
-        std::thread inputThread;
-        if (isInteractiveInput()) {
-            inputThread = std::thread(inputThreadFunc);
-        }
-        if (!std::holds_alternative<mtr::IPv4Address>(*destination)) {
-            std::cerr << "Modo UDP suporta apenas IPv4 no momento.\n";
-            g_inputStop.store(true);
-            if (inputThread.joinable()) {
-                inputThread.join();
-            }
-            return 1;
-        }
-        const auto& destIPv4 = std::get<mtr::IPv4Address>(*destination);
-        if (!runUdpTrace(options, destIPv4)) {
-            g_inputStop.store(true);
-            if (inputThread.joinable()) {
-                inputThread.join();
-            }
-            return 1;
-        }
-        g_inputStop.store(true);
-        if (inputThread.joinable()) {
-            inputThread.join();
-        }
-#else
-        std::cerr << "Modo UDP suportado apenas em Linux.\n";
-        return 1;
+    std::vector<std::string> warnings;
+    if (options.mode == "sctp") {
+        warnings.emplace_back("SCTP probing not supported yet; using ICMP.");
+        options.mode = "icmp";
+    }
+#if !defined(_WIN32)
+    if (options.mode == "tcp") {
+        warnings.emplace_back("TCP probing not supported yet; using ICMP.");
+        options.mode = "icmp";
+    }
 #endif
-    } else {
-        mtr::TraceConfig config{};
-        config.destination = *destination;
-        config.maxHops = static_cast<uint16_t>(options.maxHops);
-        config.pingSize = static_cast<uint16_t>(options.payloadSize);
-        config.pingInterval = mtr::Milliseconds(options.intervalMs);
-        config.timeout = mtr::Milliseconds(options.timeoutMs);
-        config.resolveDNS = options.resolveDNS;
-        config.resolveASN = options.resolveASN;
+    if (!options.interfaceName.empty() || !options.bindAddress.empty() ||
+        options.bitPattern >= 0 || options.tos >= 0 || options.mark >= 0 ||
+        (options.mode != "tcp" && options.port >= 0) || options.localPort >= 0) {
+        warnings.emplace_back("Socket options are not supported yet; ignoring.");
+    }
+    if (options.maxUnknown != 5) {
+        warnings.emplace_back("max-unknown is not supported yet; ignoring.");
+    }
 
-        std::atomic<int> rounds{0};
-        std::mutex doneMutex;
-        std::condition_variable doneCv;
-        bool done = false;
-        mtr::ASNResolver asnResolver;
-        std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
-        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
-        std::unordered_map<std::string, mtr::ASNInfo> asnCacheV6;
-        std::unordered_map<std::string, std::chrono::steady_clock::time_point> asnLastAttemptV6;
+    for (const auto& warning : warnings) {
+        std::cerr << "Warning: " << warning << "\n";
+    }
 
-        g_asnEnabled.store(options.resolveASN);
-        g_ipinfoMode.store(options.ipinfoMode);
-        g_inputStop.store(false);
-        std::thread inputThread;
-        if (isInteractiveInput()) {
-            inputThread = std::thread(inputThreadFunc);
+    const int family = options.ipv4Only ? AF_INET : (options.ipv6Only ? AF_INET6 : AF_UNSPEC);
+    const auto orderFields = parseOrderFields(options.order);
+
+    bool hadError = false;
+    for (size_t hostIndex = 0; hostIndex < options.hostList.size(); ++hostIndex) {
+        options.host = options.hostList[hostIndex];
+        auto destination = resolveHost(options.host, family);
+        if (!destination) {
+            std::cerr << "Failed to resolve host: " << options.host << "\n";
+            hadError = true;
+            continue;
         }
 
-        mtr::MTREngine engine([&](const mtr::TraceResult& result) {
-            if (g_interrupted.load()) {
-                std::lock_guard<std::mutex> lock(doneMutex);
-                done = true;
-                doneCv.notify_one();
-                return;
+        if (options.mode == "udp") {
+#if defined(__linux__)
+            if (options.reportMode) {
+                std::cerr << "Report mode for UDP is not supported yet.\n";
+                return 1;
+            }
+            g_asnEnabled.store(options.resolveASN);
+            g_ipinfoMode.store(options.ipinfoMode);
+            g_inputStop.store(false);
+            std::thread inputThread;
+            if (isInteractiveInput()) {
+                inputThread = std::thread(inputThreadFunc);
+            }
+            if (!std::holds_alternative<mtr::IPv4Address>(*destination)) {
+                std::cerr << "UDP mode supports IPv4 only for now.\n";
+                g_inputStop.store(true);
+                if (inputThread.joinable()) {
+                    inputThread.join();
+                }
+                return 1;
+            }
+            const auto& destIPv4 = std::get<mtr::IPv4Address>(*destination);
+            if (!runUdpTrace(options, destIPv4)) {
+                g_inputStop.store(true);
+                if (inputThread.joinable()) {
+                    inputThread.join();
+                }
+                return 1;
+            }
+            g_inputStop.store(true);
+            if (inputThread.joinable()) {
+                inputThread.join();
+            }
+#else
+            std::cerr << "UDP mode supported only on Linux.\n";
+            return 1;
+#endif
+        } else if (options.mode == "tcp") {
+#if defined(_WIN32)
+            if (!std::holds_alternative<mtr::IPv4Address>(*destination)) {
+                std::cerr << "TCP mode supports IPv4 only for now.\n";
+                return 1;
+            }
+            g_asnEnabled.store(options.resolveASN);
+            g_ipinfoMode.store(options.ipinfoMode);
+            g_inputStop.store(false);
+            std::thread inputThread;
+            if (!options.reportMode && isInteractiveInput()) {
+                inputThread = std::thread(inputThreadFunc);
+            }
+            std::optional<mtr::TraceResult> tcpResult;
+            const auto& destIPv4 = std::get<mtr::IPv4Address>(*destination);
+            if (!runTcpTraceWindows(options, destIPv4, options.reportMode, tcpResult)) {
+                g_inputStop.store(true);
+                if (inputThread.joinable()) {
+                    inputThread.join();
+                }
+                return 1;
+            }
+            g_inputStop.store(true);
+            if (inputThread.joinable()) {
+                inputThread.join();
+            }
+            if (options.reportMode && tcpResult) {
+                if (options.jsonMode) {
+                    printJsonReport(*tcpResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else if (options.xmlMode) {
+                    printXmlReport(*tcpResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else if (options.csvMode) {
+                    printCsvReport(*tcpResult, options);
+                } else if (options.rawMode) {
+                    printRawReport(*tcpResult, options);
+                } else if (options.splitMode) {
+                    printSplitReport(*tcpResult, options, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else {
+                    printReport(*tcpResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                }
+            }
+#else
+            std::cerr << "TCP mode supported only on Windows.\n";
+            return 1;
+#endif
+        } else {
+            mtr::TraceConfig config{};
+            config.destination = *destination;
+            config.firstHop = static_cast<uint16_t>(options.firstTtl);
+            config.maxHops = static_cast<uint16_t>(options.maxHops);
+            config.pingSize = static_cast<uint16_t>(options.payloadSize);
+            config.pingInterval = mtr::Milliseconds(options.intervalMs);
+            config.timeout = mtr::Milliseconds(options.timeoutMs);
+            config.resolveDNS = options.resolveDNS;
+            config.resolveASN = options.resolveASN;
+
+            std::atomic<int> rounds{0};
+            std::mutex doneMutex;
+            std::condition_variable doneCv;
+            bool done = false;
+            std::optional<mtr::TraceResult> finalResult;
+            mtr::ASNResolver asnResolver;
+            std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
+            std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
+            std::unordered_map<std::string, mtr::ASNInfo> asnCacheV6;
+            std::unordered_map<std::string, std::chrono::steady_clock::time_point> asnLastAttemptV6;
+
+            g_asnEnabled.store(options.resolveASN);
+            g_ipinfoMode.store(options.ipinfoMode);
+            g_inputStop.store(false);
+            std::thread inputThread;
+            if (!options.reportMode && isInteractiveInput()) {
+                inputThread = std::thread(inputThreadFunc);
             }
 
-            const int current = ++rounds;
-            printHeader(current, g_ipinfoMode.load(), g_asnEnabled.load());
-            for (size_t i = 0; i < result.hops.size(); ++i) {
-                auto displayHop = result.hops[i];
-                if (displayHop.asn) {
-                    if (const auto ipv4 = getIPv4Address(displayHop.address)) {
-                        asnCache[ipv4->toUint32()] = *displayHop.asn;
-                    } else if (const auto ipv6 = getIPv6Address(displayHop.address)) {
-                        asnCacheV6[ipv6->toString()] = *displayHop.asn;
+            mtr::MTREngine engine([&](const mtr::TraceResult& result) {
+                if (g_interrupted.load()) {
+                    std::lock_guard<std::mutex> lock(doneMutex);
+                    done = true;
+                    doneCv.notify_one();
+                    return;
+                }
+
+                const int current = ++rounds;
+                if (!options.reportMode) {
+                    printHeader(current, g_ipinfoMode.load(), g_asnEnabled.load());
+                }
+                for (size_t i = 0; i < result.hops.size(); ++i) {
+                    auto displayHop = result.hops[i];
+                    if (displayHop.asn) {
+                        if (const auto ipv4 = getIPv4Address(displayHop.address)) {
+                            asnCache[ipv4->toUint32()] = *displayHop.asn;
+                        } else if (const auto ipv6 = getIPv6Address(displayHop.address)) {
+                            asnCacheV6[ipv6->toString()] = *displayHop.asn;
+                        }
+                    } else if (options.resolveASN && g_asnEnabled.load()) {
+                        auto asnInfo = resolveAsnWithRetry(
+                            asnResolver,
+                            asnCache,
+                            asnLastAttempt,
+                            asnCacheV6,
+                            asnLastAttemptV6,
+                            displayHop.address);
+                        if (asnInfo) {
+                            displayHop.asn = *asnInfo;
+                        }
                     }
-                } else if (options.resolveASN && g_asnEnabled.load()) {
-                    auto asnInfo = resolveAsnWithRetry(
-                        asnResolver,
-                        asnCache,
-                        asnLastAttempt,
-                        asnCacheV6,
-                        asnLastAttemptV6,
-                        displayHop.address);
-                    if (asnInfo) {
-                        displayHop.asn = *asnInfo;
+                    if (!options.reportMode) {
+                        printHopLine(i, displayHop, g_ipinfoMode.load(), g_asnEnabled.load());
                     }
                 }
-                printHopLine(i, displayHop, g_ipinfoMode.load(), g_asnEnabled.load());
-            }
-            if (current >= options.count) {
-                std::lock_guard<std::mutex> lock(doneMutex);
-                done = true;
-                doneCv.notify_one();
-            }
-        });
 
-        if (!engine.start(config)) {
-            std::cerr << "Falha ao iniciar o traceroute.\n";
-            return 1;
+                if (options.reportMode) {
+                    finalResult = result;
+                }
+
+                if (current >= options.count) {
+                    std::lock_guard<std::mutex> lock(doneMutex);
+                    done = true;
+                    doneCv.notify_one();
+                }
+            });
+
+            if (!engine.start(config)) {
+                std::cerr << "Failed to start traceroute.\n";
+                return 1;
+            }
+
+            {
+                std::unique_lock<std::mutex> lock(doneMutex);
+                doneCv.wait(lock, [&] { return done || g_interrupted.load(); });
+            }
+
+            engine.stop();
+            g_inputStop.store(true);
+            if (inputThread.joinable()) {
+                inputThread.join();
+            }
+
+            if (options.reportMode && finalResult) {
+                if (options.jsonMode) {
+                    printJsonReport(*finalResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else if (options.xmlMode) {
+                    printXmlReport(*finalResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else if (options.csvMode) {
+                    printCsvReport(*finalResult, options);
+                } else if (options.rawMode) {
+                    printRawReport(*finalResult, options);
+                } else if (options.splitMode) {
+                    printSplitReport(*finalResult, options, g_ipinfoMode.load(), g_asnEnabled.load());
+                } else {
+                    printReport(*finalResult, options, orderFields, g_ipinfoMode.load(), g_asnEnabled.load());
+                }
+            }
         }
 
-        {
-            std::unique_lock<std::mutex> lock(doneMutex);
-            doneCv.wait(lock, [&] { return done || g_interrupted.load(); });
-        }
-
-        engine.stop();
-        g_inputStop.store(true);
-        if (inputThread.joinable()) {
-            inputThread.join();
+        if (hostIndex + 1 < options.hostList.size()) {
+            std::cout << "\n";
         }
     }
 
@@ -800,5 +2038,5 @@ int main(int argc, char** argv) {
     WSACleanup();
 #endif
 
-    return 0;
+    return hadError ? 1 : 0;
 }
