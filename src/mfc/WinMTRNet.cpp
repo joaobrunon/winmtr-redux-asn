@@ -2,6 +2,8 @@
 // FILE:            WinMTRNet.cpp
 //
 //*****************************************************************************
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include "WinMTRGlobal.h"
 #include "WinMTRNet.h"
 #include "WinMTRDialog.h"

@@ -13,6 +13,8 @@
 #ifndef WINMTRNET_H_
 #define WINMTRNET_H_
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include "ASNResolver.h"
 
 class WinMTRDialog;

@@ -444,38 +444,7 @@ CString WinMTRDialog::FormatHostLabel(int index) const
 	return CString(buf);
 }
 
-static const char* IpinfoLabel(int mode)
-{
-	switch(mode) {
-	case 0: return "ASN";
-	case 1: return "Prefix";
-	case 2: return "CC";
-	case 3: return "RIR";
-	case 4: return "Date";
-	default: return "ASN";
-	}
-}
 
-static const char* OrderLabel(char code)
-{
-	switch(code) {
-	case 'L': return "Loss%";
-	case 'D': return "Drop";
-	case 'R': return "Recv";
-	case 'S': return "Sent";
-	case 'N': return "Last";
-	case 'B': return "Best";
-	case 'A': return "Avg";
-	case 'W': return "Wrst";
-	case 'V': return "StDev";
-	case 'G': return "Gmean";
-	case 'J': return "Jttr";
-	case 'M': return "Javg";
-	case 'X': return "Jmax";
-	case 'I': return "Jint";
-	default: return "?";
-	}
-}
 
 //*****************************************************************************
 // WinMTRDialog::InitRegistry
