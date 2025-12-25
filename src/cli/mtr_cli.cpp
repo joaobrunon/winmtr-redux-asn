@@ -29,6 +29,7 @@
 
 #if defined(__linux__)
 #include <linux/errqueue.h>
+#include <termios.h>
 #include <netinet/ip_icmp.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -37,6 +38,8 @@
 #endif
 
 #ifdef _WIN32
+#include <conio.h>
+#include <io.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
@@ -56,10 +59,14 @@ struct Options {
     int payloadSize = 64;
     bool resolveDNS = true;
     bool resolveASN = true;
+    int ipinfoMode = 0;
     std::string mode = "icmp";
 };
 
 std::atomic<bool> g_interrupted{false};
+std::atomic<bool> g_asnEnabled{true};
+std::atomic<int> g_ipinfoMode{0};
+std::atomic<bool> g_inputStop{false};
 
 void handleSignal(int) {
     g_interrupted.store(true);
@@ -78,6 +85,8 @@ void printUsage(const char* argv0) {
         << "  --udp           Atalho para --mode udp\n"
         << "  --no-dns        Nao resolver DNS\n"
         << "  --no-asn        Nao resolver ASN\n"
+        << "  -z, --aslookup  Mostrar ASN (equivalente a --ipinfo 0)\n"
+        << "  -y, --ipinfo N  Mostrar IP info (0=ASN,1=Prefix,2=CC,3=RIR,4=Data)\n"
         << "  -h, --help      Mostrar esta ajuda\n";
 }
 
@@ -180,16 +189,97 @@ std::optional<mtr::IPv4Address> getIPv4Address(const mtr::NetworkAddress& addr) 
     return std::get<mtr::IPv4Address>(addr);
 }
 
+std::optional<mtr::IPv6Address> getIPv6Address(const mtr::NetworkAddress& addr) {
+    if (!std::holds_alternative<mtr::IPv6Address>(addr)) {
+        return std::nullopt;
+    }
+    return std::get<mtr::IPv6Address>(addr);
+}
+
+bool isInteractiveInput() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(STDIN_FILENO) != 0;
+#endif
+}
+
+void inputThreadFunc() {
+#ifdef _WIN32
+    while (!g_inputStop.load()) {
+        const int ch = _getch();
+        if (ch == EOF) {
+            continue;
+        }
+        if (ch == 'z' || ch == 'Z') {
+            g_asnEnabled.store(!g_asnEnabled.load());
+        } else if (ch == 'y' || ch == 'Y') {
+            const int next = (g_ipinfoMode.load() + 1) % 5;
+            g_ipinfoMode.store(next);
+        }
+    }
+#else
+    termios original{};
+    if (tcgetattr(STDIN_FILENO, &original) == 0) {
+        termios raw = original;
+        raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+        raw.c_cc[VMIN] = 1;
+        raw.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        while (!g_inputStop.load()) {
+            char ch = 0;
+            if (read(STDIN_FILENO, &ch, 1) <= 0) {
+                continue;
+            }
+            if (ch == 'z' || ch == 'Z') {
+                g_asnEnabled.store(!g_asnEnabled.load());
+            } else if (ch == 'y' || ch == 'Y') {
+                const int next = (g_ipinfoMode.load() + 1) % 5;
+                g_ipinfoMode.store(next);
+            }
+        }
+        tcsetattr(STDIN_FILENO, TCSANOW, &original);
+    }
+#endif
+}
+
 constexpr auto kAsnRetryInterval = std::chrono::seconds(5);
 
 std::optional<mtr::ASNInfo> resolveAsnWithRetry(
     mtr::ASNResolver& resolver,
     std::unordered_map<uint32_t, mtr::ASNInfo>& cache,
     std::unordered_map<uint32_t, std::chrono::steady_clock::time_point>& lastAttempt,
+    std::unordered_map<std::string, mtr::ASNInfo>& cacheV6,
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point>& lastAttemptV6,
     const mtr::NetworkAddress& address) {
     const auto ipv4 = getIPv4Address(address);
     if (!ipv4) {
-        return std::nullopt;
+        const auto ipv6 = getIPv6Address(address);
+        if (!ipv6) {
+            return std::nullopt;
+        }
+        const std::string key = ipv6->toString();
+        if (key.empty()) {
+            return std::nullopt;
+        }
+
+        auto cached6 = cacheV6.find(key);
+        if (cached6 != cacheV6.end()) {
+            return cached6->second;
+        }
+
+        const auto now6 = std::chrono::steady_clock::now();
+        auto last6 = lastAttemptV6.find(key);
+        if (last6 != lastAttemptV6.end() && now6 - last6->second < kAsnRetryInterval) {
+            return std::nullopt;
+        }
+
+        lastAttemptV6[key] = now6;
+        auto result6 = resolver.resolve(address);
+        if (result6) {
+            cacheV6[key] = *result6;
+        }
+        return result6;
     }
 
     const uint32_t key = ipv4->toUint32();
@@ -216,9 +306,59 @@ std::optional<mtr::ASNInfo> resolveAsnWithRetry(
     return result;
 }
 
-void printHeader(int round) {
+std::string ipinfoLabel(int mode, bool asnEnabled) {
+    if (!asnEnabled) {
+        return "ASN";
+    }
+    switch (mode) {
+        case 0:
+            return "ASN";
+        case 1:
+            return "Prefix";
+        case 2:
+            return "CC";
+        case 3:
+            return "RIR";
+        case 4:
+            return "Data";
+        default:
+            return "ASN";
+    }
+}
+
+std::string ipinfoValue(const mtr::HopStatistics& hop, int mode, bool asnEnabled) {
+    if (!asnEnabled) {
+        return "-";
+    }
+    if (!hop.asn || !hop.asn->isValid()) {
+        return (mode == 0) ? "AS???" : "???";
+    }
+    const auto& asn = *hop.asn;
+    switch (mode) {
+        case 0: {
+            const std::string num = "AS" + std::to_string(asn.number);
+            if (asn.organization.empty()) {
+                return num;
+            }
+            return num + " " + asn.organization;
+        }
+        case 1:
+            return asn.prefix.empty() ? "???" : asn.prefix;
+        case 2:
+            return asn.country.empty() ? "???" : asn.country;
+        case 3:
+            return asn.registry.empty() ? "???" : asn.registry;
+        case 4:
+            return asn.allocated.empty() ? "???" : asn.allocated;
+        default:
+            return "???";
+    }
+}
+
+void printHeader(int round, int ipinfoMode, bool asnEnabled) {
     std::cout << "\nRodada " << round << "\n";
-    std::cout << "Hop  Loss%   Snt   Rcv  Last  Avg   Best  Wrst  Endereco           ASN\n";
+    std::cout << "Hop  Loss%   Snt   Rcv  Last  Avg   Best  Wrst  Endereco           "
+              << ipinfoLabel(ipinfoMode, asnEnabled) << "\n";
     std::cout << "---- ----- ----- ----- ----- ----- ----- ----- ------------------ ------------------------\n";
 }
 
@@ -239,7 +379,7 @@ std::string formatMilliseconds(const std::string& value) {
     return value + "ms";
 }
 
-void printHopLine(size_t index, const mtr::HopStatistics& hop) {
+void printHopLine(size_t index, const mtr::HopStatistics& hop, int ipinfoMode, bool asnEnabled) {
     const double loss = hop.packetLossPercent();
     const bool hasReply = hop.packetsReceived > 0;
 
@@ -248,7 +388,7 @@ void printHopLine(size_t index, const mtr::HopStatistics& hop) {
     std::string best = hasReply ? std::to_string(hop.bestRTT.count()) : "-";
     std::string worst = hasReply ? std::to_string(hop.worstRTT.count()) : "-";
     std::string addr = hasReply ? addressToString(hop.address) : "*";
-    std::string asn = (hop.asn && hop.asn->isValid()) ? hop.asn->toString() : "-";
+    std::string asn = ipinfoValue(hop, ipinfoMode, asnEnabled);
 
     addr = fitColumn(addr, 18);
     asn = fitColumn(asn, 24);
@@ -298,6 +438,8 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
     mtr::ASNResolver asnResolver;
     std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
     std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
+    std::unordered_map<std::string, mtr::ASNInfo> asnCacheV6;
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> asnLastAttemptV6;
     int finalHop = -1;
 
     for (int round = 1; round <= options.count; ++round) {
@@ -305,7 +447,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
             break;
         }
 
-        printHeader(round);
+        printHeader(round, g_ipinfoMode.load(), g_asnEnabled.load());
         const int hopLimit = (finalHop > 0) ? finalHop : options.maxHops;
 
         for (int ttl = 1; ttl <= hopLimit; ++ttl) {
@@ -336,7 +478,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
                 sizeof(destAddr));
 
             if (sent < 0) {
-                printHopLine(static_cast<size_t>(ttl - 1), hop);
+                printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
                 continue;
             }
 
@@ -346,7 +488,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
             int pollResult = poll(&pfd, 1, options.timeoutMs);
 
             if (pollResult <= 0 || !(pfd.revents & POLLERR)) {
-                printHopLine(static_cast<size_t>(ttl - 1), hop);
+                printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
                 continue;
             }
 
@@ -367,7 +509,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
 
             ssize_t recvLen = recvmsg(sock, &msg, MSG_ERRQUEUE);
             if (recvLen < 0) {
-                printHopLine(static_cast<size_t>(ttl - 1), hop);
+                printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
                 continue;
             }
 
@@ -383,7 +525,7 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
             auto rtt = std::chrono::duration_cast<mtr::Milliseconds>(end - start);
 
             if (!serr || serr->ee_origin != SO_EE_ORIGIN_ICMP) {
-                printHopLine(static_cast<size_t>(ttl - 1), hop);
+                printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
                 continue;
             }
 
@@ -403,14 +545,20 @@ bool runUdpTrace(const Options& options, const mtr::IPv4Address& destIPv4) {
                 }
             }
 
-            if (options.resolveASN && !hop.asn) {
-                auto asnInfo = resolveAsnWithRetry(asnResolver, asnCache, asnLastAttempt, hop.address);
+            if (options.resolveASN && g_asnEnabled.load() && !hop.asn) {
+                auto asnInfo = resolveAsnWithRetry(
+                    asnResolver,
+                    asnCache,
+                    asnLastAttempt,
+                    asnCacheV6,
+                    asnLastAttemptV6,
+                    hop.address);
                 if (asnInfo) {
                     hop.asn = *asnInfo;
                 }
             }
 
-            printHopLine(static_cast<size_t>(ttl - 1), hop);
+            printHopLine(static_cast<size_t>(ttl - 1), hop, g_ipinfoMode.load(), g_asnEnabled.load());
             std::this_thread::sleep_for(std::chrono::milliseconds(30));
         }
 
@@ -457,8 +605,28 @@ int main(int argc, char** argv) {
             options.resolveASN = false;
             continue;
         }
+        if (arg == "-z" || arg == "--aslookup") {
+            options.ipinfoMode = 0;
+            options.resolveASN = true;
+            continue;
+        }
         if (arg == "--udp") {
             options.mode = "udp";
+            continue;
+        }
+        if (arg == "-y" || arg == "--ipinfo") {
+            std::string value;
+            if (!readOptionValue(argc, argv, i, value)) {
+                std::cerr << "Opcao invalida: " << arg << "\n";
+                return 1;
+            }
+            int parsed = 0;
+            if (!parseInt(value, parsed) || parsed < 0 || parsed > 4) {
+                std::cerr << "Opcao invalida: " << arg << "\n";
+                return 1;
+            }
+            options.ipinfoMode = parsed;
+            options.resolveASN = true;
             continue;
         }
         if (arg.rfind("--", 0) == 0) {
@@ -513,13 +681,32 @@ int main(int argc, char** argv) {
 
     if (options.mode == "udp") {
 #if defined(__linux__)
+        g_asnEnabled.store(options.resolveASN);
+        g_ipinfoMode.store(options.ipinfoMode);
+        g_inputStop.store(false);
+        std::thread inputThread;
+        if (isInteractiveInput()) {
+            inputThread = std::thread(inputThreadFunc);
+        }
         if (!std::holds_alternative<mtr::IPv4Address>(*destination)) {
             std::cerr << "Modo UDP suporta apenas IPv4 no momento.\n";
+            g_inputStop.store(true);
+            if (inputThread.joinable()) {
+                inputThread.join();
+            }
             return 1;
         }
         const auto& destIPv4 = std::get<mtr::IPv4Address>(*destination);
         if (!runUdpTrace(options, destIPv4)) {
+            g_inputStop.store(true);
+            if (inputThread.joinable()) {
+                inputThread.join();
+            }
             return 1;
+        }
+        g_inputStop.store(true);
+        if (inputThread.joinable()) {
+            inputThread.join();
         }
 #else
         std::cerr << "Modo UDP suportado apenas em Linux.\n";
@@ -542,6 +729,16 @@ int main(int argc, char** argv) {
         mtr::ASNResolver asnResolver;
         std::unordered_map<uint32_t, mtr::ASNInfo> asnCache;
         std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> asnLastAttempt;
+        std::unordered_map<std::string, mtr::ASNInfo> asnCacheV6;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> asnLastAttemptV6;
+
+        g_asnEnabled.store(options.resolveASN);
+        g_ipinfoMode.store(options.ipinfoMode);
+        g_inputStop.store(false);
+        std::thread inputThread;
+        if (isInteractiveInput()) {
+            inputThread = std::thread(inputThreadFunc);
+        }
 
         mtr::MTREngine engine([&](const mtr::TraceResult& result) {
             if (g_interrupted.load()) {
@@ -552,20 +749,28 @@ int main(int argc, char** argv) {
             }
 
             const int current = ++rounds;
-            printHeader(current);
+            printHeader(current, g_ipinfoMode.load(), g_asnEnabled.load());
             for (size_t i = 0; i < result.hops.size(); ++i) {
                 auto displayHop = result.hops[i];
                 if (displayHop.asn) {
                     if (const auto ipv4 = getIPv4Address(displayHop.address)) {
                         asnCache[ipv4->toUint32()] = *displayHop.asn;
+                    } else if (const auto ipv6 = getIPv6Address(displayHop.address)) {
+                        asnCacheV6[ipv6->toString()] = *displayHop.asn;
                     }
-                } else if (options.resolveASN) {
-                    auto asnInfo = resolveAsnWithRetry(asnResolver, asnCache, asnLastAttempt, displayHop.address);
+                } else if (options.resolveASN && g_asnEnabled.load()) {
+                    auto asnInfo = resolveAsnWithRetry(
+                        asnResolver,
+                        asnCache,
+                        asnLastAttempt,
+                        asnCacheV6,
+                        asnLastAttemptV6,
+                        displayHop.address);
                     if (asnInfo) {
                         displayHop.asn = *asnInfo;
                     }
                 }
-                printHopLine(i, displayHop);
+                printHopLine(i, displayHop, g_ipinfoMode.load(), g_asnEnabled.load());
             }
             if (current >= options.count) {
                 std::lock_guard<std::mutex> lock(doneMutex);
@@ -585,6 +790,10 @@ int main(int argc, char** argv) {
         }
 
         engine.stop();
+        g_inputStop.store(true);
+        if (inputThread.joinable()) {
+            inputThread.join();
+        }
     }
 
 #ifdef _WIN32

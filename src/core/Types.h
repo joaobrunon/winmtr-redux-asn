@@ -67,6 +67,9 @@ struct ASNInfo {
     uint32_t number{0};                     ///< ASN number (e.g., 15169)
     std::string organization;               ///< Organization name (e.g., "Google LLC")
     std::string country;                    ///< Country code (e.g., "US")
+    std::string prefix;                     ///< BGP prefix (e.g., "8.8.8.0/24")
+    std::string registry;                   ///< RIR (e.g., "arin")
+    std::string allocated;                  ///< Allocation date (e.g., "2005-01-01")
 
     [[nodiscard]] bool isValid() const noexcept {
         return number != 0;
@@ -74,6 +77,9 @@ struct ASNInfo {
 
     [[nodiscard]] std::string toString() const {
         if (!isValid()) return "Unknown";
+        if (organization.empty()) {
+            return "AS" + std::to_string(number);
+        }
         return "AS" + std::to_string(number) + " " + organization;
     }
 };
