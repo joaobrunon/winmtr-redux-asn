@@ -34,6 +34,8 @@ public:
 	              int tos,
 	              int bitPattern,
 	              int mode,
+	              int port,
+	              int localPort,
 	              CWnd* pParent=NULL) :
 		interval(interval),
 		pingsize(pingsize),
@@ -45,6 +47,8 @@ public:
 		tos(tos),
 		bitPattern(bitPattern),
 		mode(mode),
+		port(port),
+		localPort(localPort),
 		CDialog(WinMTROptions::IDD, pParent) {};
 		
 	double GetInterval()			{ return interval; };
@@ -57,6 +61,8 @@ public:
 	int GetTos()					{ return tos; };
 	int GetBitPattern()				{ return bitPattern; };
 	int GetMode()					{ return mode; };
+	int GetPort()					{ return port; };
+	int GetLocalPort()				{ return localPort; };
 	
 	enum { IDD = IDD_DIALOG_OPTIONS };
 	CEdit	m_editSize;
@@ -67,6 +73,8 @@ public:
 	CEdit	m_editTimeout;
 	CEdit	m_editTos;
 	CEdit	m_editBitPattern;
+	CEdit	m_editPort;
+	CEdit	m_editLocalPort;
 	CButton	m_checkDNS;
 	CComboBox m_comboMode;
 	
@@ -91,6 +99,8 @@ private:
 	int		tos;
 	int		bitPattern;
 	int		mode;
+	int		port;
+	int		localPort;
 };
 
 #endif // ifndef WINMTROPTIONS_H_

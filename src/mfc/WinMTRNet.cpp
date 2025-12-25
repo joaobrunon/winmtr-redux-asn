@@ -42,6 +42,25 @@ unsigned WINAPI TraceThread(void* p);
 unsigned WINAPI TraceThread6(void* p);
 void DnsResolverThread(void* p);
 
+static bool ParseIcmpTimeExceeded(const unsigned char* buffer, int length, unsigned short expectedPort)
+{
+	if(length < 28) return false;
+	unsigned char ipHeaderLen = (buffer[0] & 0x0F) * 4;
+	if(length < ipHeaderLen + 8) return false;
+	unsigned char icmpType = buffer[ipHeaderLen];
+	if(icmpType != 11 && icmpType != 3) return false;
+	const unsigned char* innerIp = buffer + ipHeaderLen + 8;
+	if(innerIp + 20 > buffer + length) return false;
+	unsigned char innerHeaderLen = (innerIp[0] & 0x0F) * 4;
+	if(innerIp + innerHeaderLen + 8 > buffer + length) return false;
+	if(innerIp[9] != IPPROTO_TCP) return false;
+	const unsigned char* tcpHeader = innerIp + innerHeaderLen;
+	unsigned short destPortNet = 0;
+	memcpy(&destPortNet, tcpHeader + 2, sizeof(destPortNet));
+	unsigned short destPort = ntohs(destPortNet);
+	return destPort == expectedPort;
+}
+
 WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 {
 
@@ -180,6 +199,142 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 	}
 	WaitForMultipleObjects(hops, hThreads, TRUE, INFINITE);
 	for(; hops;) CloseHandle(hThreads[--hops]);
+}
+
+void WinMTRNet::DoTraceTcp(sockaddr_in* sockaddr)
+{
+	if(!sockaddr) return;
+	ResetHops();
+	tracing = true;
+	host[0].addr.sin_family = AF_INET;
+	last_remote_addr = sockaddr->sin_addr;
+
+	int maxHops = wmtrdlg->maxHops;
+	if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
+	if(maxHops > MAX_HOPS) maxHops = MAX_HOPS;
+	int firstTtl = wmtrdlg->firstTtl;
+	if(firstTtl <= 0) firstTtl = 1;
+	if(firstTtl > maxHops) firstTtl = maxHops;
+
+	SOCKET icmpSock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if(icmpSock == INVALID_SOCKET) {
+		AfxMessageBox("Failed to create raw ICMP socket for TCP mode.");
+		tracing = false;
+		return;
+	}
+
+	sockaddr_in destAddr = *sockaddr;
+	unsigned short destPort = static_cast<unsigned short>(wmtrdlg->port);
+	if(destPort == 0) destPort = DEFAULT_PORT;
+	destAddr.sin_port = htons(destPort);
+
+	int finalHop = -1;
+	while(tracing) {
+		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {
+			if(!tracing) break;
+			while(wmtrdlg->paused && tracing) {
+				Sleep(100);
+			}
+
+			if(finalHop > 0 && ttl > finalHop) break;
+
+			AddXmit(ttl - 1);
+
+			SOCKET tcpSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if(tcpSock == INVALID_SOCKET) {
+				continue;
+			}
+
+			if(wmtrdlg->tos >= 0) {
+				int tos = wmtrdlg->tos;
+				setsockopt(tcpSock, IPPROTO_IP, IP_TOS, reinterpret_cast<const char*>(&tos), sizeof(tos));
+			}
+
+			if(wmtrdlg->localPort >= 0) {
+				sockaddr_in bindAddr{};
+				bindAddr.sin_family = AF_INET;
+				bindAddr.sin_port = htons(static_cast<unsigned short>(wmtrdlg->localPort));
+				bindAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+				bind(tcpSock, reinterpret_cast<sockaddr*>(&bindAddr), sizeof(bindAddr));
+			}
+
+			int ttlVal = ttl;
+			setsockopt(tcpSock, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&ttlVal), sizeof(ttlVal));
+
+			u_long nonBlocking = 1;
+			ioctlsocket(tcpSock, FIONBIO, &nonBlocking);
+
+			DWORD startTick = GetTickCount();
+			connect(tcpSock, reinterpret_cast<sockaddr*>(&destAddr), sizeof(destAddr));
+
+			bool gotReply = false;
+			sockaddr_in replyAddr{};
+			int rtt = 0;
+
+			while(true) {
+				DWORD nowTick = GetTickCount();
+				DWORD elapsed = nowTick - startTick;
+				if(elapsed >= static_cast<DWORD>(wmtrdlg->timeoutMs)) {
+					break;
+				}
+				int remainingMs = wmtrdlg->timeoutMs - static_cast<int>(elapsed);
+				timeval tv{};
+				tv.tv_sec = remainingMs / 1000;
+				tv.tv_usec = (remainingMs % 1000) * 1000;
+
+				fd_set readfds;
+				fd_set writefds;
+				FD_ZERO(&readfds);
+				FD_ZERO(&writefds);
+				FD_SET(icmpSock, &readfds);
+				FD_SET(tcpSock, &writefds);
+
+				int ready = select(0, &readfds, &writefds, NULL, &tv);
+				if(ready <= 0) break;
+
+				if(FD_ISSET(icmpSock, &readfds)) {
+					unsigned char buffer[512];
+					sockaddr_in fromAddr{};
+					int fromLen = sizeof(fromAddr);
+					int recvLen = recvfrom(icmpSock, reinterpret_cast<char*>(buffer), sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
+					if(recvLen > 0 && ParseIcmpTimeExceeded(buffer, recvLen, destPort)) {
+						rtt = static_cast<int>(GetTickCount() - startTick);
+						replyAddr = fromAddr;
+						gotReply = true;
+						break;
+					}
+				}
+
+				if(FD_ISSET(tcpSock, &writefds)) {
+					int soError = 0;
+					int len = sizeof(soError);
+					getsockopt(tcpSock, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&soError), &len);
+					rtt = static_cast<int>(GetTickCount() - startTick);
+					if(soError == 0 || soError == WSAECONNREFUSED) {
+						replyAddr = destAddr;
+						gotReply = true;
+						if(finalHop <= 0) finalHop = ttl;
+					}
+					break;
+				}
+			}
+
+			closesocket(tcpSock);
+
+			if(gotReply) {
+				UpdateRTT(ttl - 1, rtt);
+				AddReturned(ttl - 1);
+				SetAddr(ttl - 1, replyAddr.sin_addr.s_addr);
+			}
+
+			Sleep(30);
+		}
+
+		if(!tracing) break;
+		Sleep(static_cast<DWORD>(wmtrdlg->interval * 1000));
+	}
+
+	closesocket(icmpSock);
 }
 
 void WinMTRNet::StopTrace()
@@ -575,9 +730,6 @@ void DnsResolverThread(void* p)
 	}
 	delete p;
 }
-
-
-
 
 
 

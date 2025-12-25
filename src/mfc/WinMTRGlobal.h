@@ -61,6 +61,8 @@
 #define DEFAULT_MAX_HOPS	30
 #define DEFAULT_TOS			-1
 #define DEFAULT_BITPATTERN	-1
+#define DEFAULT_PORT		80
+#define DEFAULT_LOCALPORT	-1
 
 #define SAVED_PINGS 100
 #define MaxHost 256

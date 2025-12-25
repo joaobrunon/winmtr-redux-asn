@@ -93,6 +93,8 @@ public:
 	int					tos;
 	int					bitPattern;
 	int					probeMode;
+	int					port;
+	int					localPort;
 	bool				showIps;
 	bool				paused;
 	int					nrLRU;

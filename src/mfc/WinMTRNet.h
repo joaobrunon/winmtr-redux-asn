@@ -70,6 +70,7 @@ public:
 	WinMTRNet(WinMTRDialog* wp);
 	~WinMTRNet();
 	void	DoTrace(sockaddr* sockaddr);
+	void	DoTraceTcp(sockaddr_in* sockaddr);
 	void	ResetHops();
 	void	StopTrace();
 	

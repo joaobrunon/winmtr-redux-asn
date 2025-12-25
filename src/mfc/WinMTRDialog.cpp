@@ -125,6 +125,8 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	tos = DEFAULT_TOS;
 	bitPattern = DEFAULT_BITPATTERN;
 	probeMode = 0;
+	port = DEFAULT_PORT;
+	localPort = DEFAULT_LOCALPORT;
 	showIps = false;
 	paused = false;
 	nrLRU = 0;
@@ -368,6 +370,18 @@ BOOL WinMTRDialog::InitRegistry()
 		RegSetValueEx(hKey_v,"ProbeMode", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 	} else {
 		probeMode = static_cast<int>(tmp_dword);
+	}
+	if(RegQueryValueEx(hKey_v, "Port", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
+		tmp_dword = port;
+		RegSetValueEx(hKey_v,"Port", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+	} else {
+		port = static_cast<int>(tmp_dword);
+	}
+	if(RegQueryValueEx(hKey_v, "LocalPort", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
+		tmp_dword = static_cast<DWORD>(localPort);
+		RegSetValueEx(hKey_v,"LocalPort", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+	} else {
+		localPort = static_cast<int>(tmp_dword);
 	}
 	
 	r = RegCreateKeyEx(hKey,"LRU",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey_v,NULL);
@@ -619,6 +633,15 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 		case 'N':
 			useDNS = !useDNS;
 			statusBar.SetPaneText(0, useDNS ? "DNS resolution enabled." : "DNS resolution disabled.");
+			{
+				HKEY hKey;
+				DWORD tmp_dword;
+				if(RegCreateKeyEx(HKEY_CURRENT_USER,"Software\\WinMTR\\Config",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey,NULL)==ERROR_SUCCESS) {
+					tmp_dword = useDNS ? 1 : 0;
+					RegSetValueEx(hKey,"UseDNS", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+					RegCloseKey(hKey);
+				}
+			}
 			return TRUE;
 		case 'B':
 			showIps = !showIps;
@@ -629,14 +652,27 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 			Transit(EXIT);
 			return TRUE;
 		case 'U':
-			statusBar.SetPaneText(0, "Only ICMP mode is supported in the MFC UI right now.");
+			probeMode = (probeMode + 1) % 3;
+			if(probeMode == 1) {
+				statusBar.SetPaneText(0, "UDP mode is not supported in the MFC UI yet. Using ICMP.");
+				probeMode = 0;
+			} else if(probeMode == 2 && useIPv6 == 1) {
+				statusBar.SetPaneText(0, "TCP mode supports IPv4 only in the MFC UI. Using ICMP.");
+				probeMode = 0;
+			} else {
+				statusBar.SetPaneText(0, probeMode == 2 ? "TCP mode selected." : "ICMP mode selected.");
+			}
 			return TRUE;
 		case 'Y':
 		case 'Z':
 			statusBar.SetPaneText(0, "IP info/ASN toggles are not supported yet.");
 			return TRUE;
 		case 'O':
-			statusBar.SetPaneText(0, "Column ordering is not supported yet.");
+		case 'I':
+		case 'F':
+		case 'M':
+		case 'S':
+			OnOptions();
 			return TRUE;
 		case 'D':
 			statusBar.SetPaneText(0, "Display modes are not supported yet.");
@@ -675,8 +711,12 @@ void WinMTRDialog::OnRestart()
 			m_comboHost.SetFocus();
 			return ;
 		}
-		if(probeMode != 0) {
-			AfxMessageBox("Only ICMP mode is supported in the MFC UI right now.");
+		if(probeMode == 1) {
+			AfxMessageBox("UDP mode is not supported in the MFC UI yet. Using ICMP.");
+			probeMode = 0;
+		}
+		if(probeMode == 2 && useIPv6 == 1) {
+			AfxMessageBox("TCP mode supports IPv4 only in the MFC UI. Using ICMP.");
 			probeMode = 0;
 		}
 		m_listMTR.DeleteAllItems();
@@ -716,7 +756,7 @@ void WinMTRDialog::OnRestart()
 //*****************************************************************************
 void WinMTRDialog::OnOptions()
 {
-	WinMTROptions optDlg(interval, pingsize, maxLRU, useDNS, maxHops, firstTtl, timeoutMs, tos, bitPattern, probeMode);
+	WinMTROptions optDlg(interval, pingsize, maxLRU, useDNS, maxHops, firstTtl, timeoutMs, tos, bitPattern, probeMode, port, localPort);
 	if(IDOK == optDlg.DoModal()) {
 	
 		pingsize = (WORD)optDlg.GetPingSize();
@@ -729,10 +769,14 @@ void WinMTRDialog::OnOptions()
 		tos = optDlg.GetTos();
 		bitPattern = optDlg.GetBitPattern();
 		probeMode = optDlg.GetMode();
+		port = optDlg.GetPort();
+		localPort = optDlg.GetLocalPort();
 		if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
 		if(firstTtl <= 0) firstTtl = DEFAULT_FIRST_TTL;
 		if(firstTtl > maxHops) firstTtl = maxHops;
 		if(timeoutMs <= 0) timeoutMs = DEFAULT_TIMEOUT_MS;
+		if(port <= 0 || port > 65535) port = DEFAULT_PORT;
+		if(localPort < 0 || localPort > 65535) localPort = DEFAULT_LOCALPORT;
 		
 		HKEY hKey;
 		DWORD tmp_dword;
@@ -758,6 +802,10 @@ void WinMTRDialog::OnOptions()
 			RegSetValueEx(hKey,"BitPattern", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 			tmp_dword = static_cast<DWORD>(probeMode);
 			RegSetValueEx(hKey,"ProbeMode", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+			tmp_dword = static_cast<DWORD>(port);
+			RegSetValueEx(hKey,"Port", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+			tmp_dword = static_cast<DWORD>(localPort);
+			RegSetValueEx(hKey,"LocalPort", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 			RegCloseKey(hKey);
 		}
 		if(maxLRU<nrLRU) {
@@ -1274,7 +1322,19 @@ void PingThread(void* p)
 		ReleaseMutex(wmtrdlg->traceThreadMutex);
 		return;
 	}
-	wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
+	if(wmtrdlg->probeMode == 2) {
+		if(anfo->ai_family == AF_INET) {
+			wmtrdlg->wmtrnet->DoTraceTcp(reinterpret_cast<sockaddr_in*>(anfo->ai_addr));
+		} else {
+			AfxMessageBox("TCP mode supports IPv4 only in the MFC UI.");
+			wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
+		}
+	} else {
+		if(wmtrdlg->probeMode == 1) {
+			AfxMessageBox("UDP mode is not supported in the MFC UI yet.");
+		}
+		wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
+	}
 	freeaddrinfo(anfo);
 	ReleaseMutex(wmtrdlg->traceThreadMutex);
 }
