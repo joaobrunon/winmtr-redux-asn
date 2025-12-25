@@ -9,6 +9,7 @@
 #include <sstream>
 #include <array>
 #include <cstring>
+#include <cmath>
 #include <string>
 
 #ifdef _DEBUG

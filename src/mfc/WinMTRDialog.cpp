@@ -676,19 +676,34 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	ScreenToClient(&lb);
 	m_staticJ.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 16, lb.Height(), SWP_NOMOVE | SWP_NOZORDER);
 	
-	m_buttonOptions.GetWindowRect(&lb);
-	ScreenToClient(&lb);
-	m_buttonOptions.SetWindowPos(NULL, rct.Width() - lb.Width()-52-16, lb.TopLeft().y, lb.Width(), lb.Height() , SWP_NOSIZE | SWP_NOZORDER);
-	m_buttonExit.GetWindowRect(&lb);
-	ScreenToClient(&lb);
-	m_buttonExit.SetWindowPos(NULL, rct.Width() - lb.Width()-16, lb.TopLeft().y, lb.Width(), lb.Height() , SWP_NOSIZE | SWP_NOZORDER);
-	
-	m_buttonExpH.GetWindowRect(&lb);
-	ScreenToClient(&lb);
-	m_buttonExpH.SetWindowPos(NULL, rct.Width() - lb.Width()-16, lb.TopLeft().y, lb.Width(), lb.Height() , SWP_NOSIZE | SWP_NOZORDER);
-	m_buttonExpT.GetWindowRect(&lb);
-	ScreenToClient(&lb);
-	m_buttonExpT.SetWindowPos(NULL, rct.Width() - lb.Width()- 103, lb.TopLeft().y, lb.Width(), lb.Height() , SWP_NOSIZE | SWP_NOZORDER);
+	const int rightMargin = 16;
+	const int spacing = 4;
+	int currentRight = rct.Width() - rightMargin;
+
+	CButton* topRightButtons[] = {
+		&m_buttonExit,
+		&m_buttonOptions
+	};
+	for(auto* btn : topRightButtons) {
+		btn->GetWindowRect(&lb);
+		ScreenToClient(&lb);
+		btn->SetWindowPos(NULL, currentRight - lb.Width(), lb.TopLeft().y, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		currentRight -= (lb.Width() + spacing);
+	}
+
+	currentRight = rct.Width() - rightMargin;
+	CButton* exportButtons[] = {
+		&m_buttonExpH,
+		&m_buttonExpT,
+		&m_buttonExpJson,
+		&m_buttonExpCsv
+	};
+	for(auto* btn : exportButtons) {
+		btn->GetWindowRect(&lb);
+		ScreenToClient(&lb);
+		btn->SetWindowPos(NULL, currentRight - lb.Width(), lb.TopLeft().y, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		currentRight -= (lb.Width() + spacing);
+	}
 	
 	m_listMTR.GetWindowRect(&lb);
 	ScreenToClient(&lb);
@@ -1264,15 +1279,23 @@ void WinMTRDialog::OnEXPCSV()
 		int nh = wmtrnet->GetMax();
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 
-		std::ostringstream csv;
-		csv << "Host";
-		for(char code : orderFields) {
-			csv << "," << OrderLabel(code);
-		}
-		if(asnEnabled) {
-			csv << "," << IpinfoLabel(ipinfoMode);
-		}
-		csv << "\r\n";
+	std::ostringstream csv;
+	csv << "Host";
+	for(char code : orderFields) {
+		csv << "," << OrderLabel(code);
+	}
+	if(asnEnabled) {
+		csv << "," << IpinfoLabel(ipinfoMode);
+	}
+	csv << "\r\n";
+	csv << "FieldCodes";
+	for(char code : orderFields) {
+		csv << "," << code;
+	}
+	if(asnEnabled) {
+		csv << ",IPINFO";
+	}
+	csv << "\r\n";
 
 		for(int i = startIndex; i < nh; i++) {
 			CString host = FormatHostLabel(i);
@@ -1410,6 +1433,18 @@ void WinMTRDialog::OnEXPJSON()
 			json << "\"" << IpinfoLabel(ipinfoMode) << "\"";
 		}
 		json << "],\r\n";
+		json << "  \"field_codes\": [";
+		for(size_t f = 0; f < orderFields.size(); ++f) {
+			json << "\"" << orderFields[f] << "\"";
+			if(f + 1 < orderFields.size()) json << ", ";
+		}
+		if(asnEnabled) {
+			if(!orderFields.empty()) json << ", ";
+			json << "\"IPINFO\"";
+		}
+		json << "],\r\n";
+		json << "  \"ipinfo_mode\": " << ipinfoMode << ",\r\n";
+		json << "  \"asn_enabled\": " << (asnEnabled ? "true" : "false") << ",\r\n";
 		json << "  \"hops\": [\r\n";
 
 		for(int i = startIndex; i < nh; i++) {
