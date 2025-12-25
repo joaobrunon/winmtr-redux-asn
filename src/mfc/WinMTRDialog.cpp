@@ -416,6 +416,27 @@ CString WinMTRDialog::FormatIpInfo(int index) const
 	}
 }
 
+CString WinMTRDialog::FormatHostLabel(int index) const
+{
+	char buf[255];
+	wmtrnet->GetName(index, buf);
+	if(!*buf) strcpy(buf, "No response from host");
+
+	if(showIps) {
+		char ipbuf[NI_MAXHOST];
+		if(!getnameinfo(wmtrnet->GetAddr(index), sizeof(sockaddr_in6), ipbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
+			if(strcmp(buf, ipbuf) != 0 && strcmp(buf, "No response from host") != 0) {
+				CString combined;
+				combined.Format("%s (%s)", buf, ipbuf);
+				return combined;
+			}
+			return CString(ipbuf);
+		}
+	}
+
+	return CString(buf);
+}
+
 static const char* IpinfoLabel(int mode)
 {
 	switch(mode) {
@@ -425,6 +446,27 @@ static const char* IpinfoLabel(int mode)
 	case 3: return "RIR";
 	case 4: return "Date";
 	default: return "ASN";
+	}
+}
+
+static const char* OrderLabel(char code)
+{
+	switch(code) {
+	case 'L': return "Loss%";
+	case 'D': return "Drop";
+	case 'R': return "Recv";
+	case 'S': return "Sent";
+	case 'N': return "Last";
+	case 'B': return "Best";
+	case 'A': return "Avg";
+	case 'W': return "Wrst";
+	case 'V': return "StDev";
+	case 'G': return "Gmean";
+	case 'J': return "Jttr";
+	case 'M': return "Javg";
+	case 'X': return "Jmax";
+	case 'I': return "Jint";
+	default: return "?";
 	}
 }
 
@@ -1046,39 +1088,35 @@ void WinMTRDialog::OnOptions()
 //*****************************************************************************
 void WinMTRDialog::OnCTTC()
 {
-	char buf[255], t_buf[1000], f_buf[255*100];
+	std::ostringstream out;
 	
 	int nh = wmtrnet->GetMax();
 	int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
-	
-	strcpy(f_buf,  "|--------------------------------------------------------------------------------------------------------------|\r\n");
-	sprintf(t_buf, "|                                      WinMTR statistics                                   |\r\n");
-	strcat(f_buf, t_buf);
-	sprintf(t_buf, "|                       Host              -   %%  | Sent | Recv | Best | Avrg | Wrst | Last | StDev| Jttr |\r\n");
-	strcat(f_buf, t_buf);
-	sprintf(t_buf, "|------------------------------------------------|------|------|------|------|------|------|------|------|\r\n");
-	strcat(f_buf, t_buf);
-	
-	for(int i = startIndex; i < nh; i++) {
-		wmtrnet->GetName(i, buf);
-		if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
-		
-		sprintf(t_buf, "|%40s - %4d | %4d | %4d | %4d | %4d | %4d | %4d | %4d | %4d |\r\n" ,
-				buf, wmtrnet->GetPercent(i),
-				wmtrnet->GetXmit(i), wmtrnet->GetReturned(i), wmtrnet->GetBest(i),
-				wmtrnet->GetAvg(i), wmtrnet->GetWorst(i), wmtrnet->GetLast(i),
-				wmtrnet->GetStDev(i), wmtrnet->GetJitter(i));
-		strcat(f_buf, t_buf);
+
+	out << "Host";
+	for(char code : orderFields) {
+		out << " | " << OrderLabel(code);
 	}
-	
-	sprintf(t_buf, "|________________________________________________|______|______|______|______|______|______|______|______|\r\n");
-	strcat(f_buf, t_buf);
-	
-	CString cs_tmp((LPCSTR)IDS_STRING_SB_NAME);
-	strcat(f_buf, "   ");
-	strcat(f_buf, (LPCTSTR)cs_tmp);
-	
-	CString source(f_buf);
+	if(asnEnabled) {
+		out << " | " << IpinfoLabel(ipinfoMode);
+	}
+	out << "\r\n";
+
+	for(int i = startIndex; i < nh; i++) {
+		CString host = FormatHostLabel(i);
+		out << host.GetString();
+		for(char code : orderFields) {
+			CString value = FormatFieldValue(code, i);
+			out << " | " << value.GetString();
+		}
+		if(asnEnabled) {
+			CString value = FormatIpInfo(i);
+			out << " | " << value.GetString();
+		}
+		out << "\r\n";
+	}
+
+	CString source(out.str().c_str());
 	
 	HGLOBAL clipbuffer;
 	char* buffer;
@@ -1103,37 +1141,40 @@ void WinMTRDialog::OnCTTC()
 //*****************************************************************************
 void WinMTRDialog::OnCHTC()
 {
-	char buf[255], t_buf[1000], f_buf[255*100];
+	std::ostringstream html;
 	
 	int nh = wmtrnet->GetMax();
 	int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 	
-	strcpy(f_buf, "<html><head><title>WinMTR Statistics</title></head><body bgcolor=\"white\">\r\n");
-	sprintf(t_buf, "<center><h2>WinMTR statistics</h2></center>\r\n");
-	strcat(f_buf, t_buf);
-	
-	sprintf(t_buf, "<p align=\"center\"> <table border=\"1\" align=\"center\">\r\n");
-	strcat(f_buf, t_buf);
-	
-	sprintf(t_buf, "<tr><td>Host</td> <td>%%</td> <td>Sent</td> <td>Recv</td> <td>Best</td> <td>Avrg</td> <td>Wrst</td> <td>Last</td> <td>StDev</td> <td>Jttr</td></tr>\r\n");
-	strcat(f_buf, t_buf);
+	html << "<html><head><title>WinMTR Statistics</title></head><body bgcolor=\"white\">\r\n";
+	html << "<center><h2>WinMTR statistics</h2></center>\r\n";
+	html << "<p align=\"center\"> <table border=\"1\" align=\"center\">\r\n";
+	html << "<tr><td>Host</td>";
+	for(char code : orderFields) {
+		html << "<td>" << OrderLabel(code) << "</td>";
+	}
+	if(asnEnabled) {
+		html << "<td>" << IpinfoLabel(ipinfoMode) << "</td>";
+	}
+	html << "</tr>\r\n";
 	
 	for(int i = startIndex; i < nh; i++) {
-		wmtrnet->GetName(i, buf);
-		if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
-		
-		sprintf(t_buf, "<tr><td>%s</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td></tr>\r\n" ,
-				buf, wmtrnet->GetPercent(i),
-				wmtrnet->GetXmit(i), wmtrnet->GetReturned(i), wmtrnet->GetBest(i),
-				wmtrnet->GetAvg(i), wmtrnet->GetWorst(i), wmtrnet->GetLast(i),
-				wmtrnet->GetStDev(i), wmtrnet->GetJitter(i));
-		strcat(f_buf, t_buf);
+		CString host = FormatHostLabel(i);
+		html << "<tr><td>" << host.GetString() << "</td>";
+		for(char code : orderFields) {
+			CString value = FormatFieldValue(code, i);
+			html << "<td>" << value.GetString() << "</td>";
+		}
+		if(asnEnabled) {
+			CString value = FormatIpInfo(i);
+			html << "<td>" << value.GetString() << "</td>";
+		}
+		html << "</tr>\r\n";
 	}
 	
-	sprintf(t_buf, "</table></body></html>\r\n");
-	strcat(f_buf, t_buf);
+	html << "</table></body></html>\r\n";
 	
-	CString source(f_buf);
+	CString source(html.str().c_str());
 	
 	HGLOBAL clipbuffer;
 	char* buffer;
@@ -1167,43 +1208,36 @@ void WinMTRDialog::OnEXPT()
 					szFilter,
 					this);
 	if(dlg.DoModal() == IDOK) {
-	
-		char buf[255], t_buf[1000], f_buf[255*100];
-		
 		int nh = wmtrnet->GetMax();
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
+		std::ostringstream out;
 		
-		strcpy(f_buf,  "|--------------------------------------------------------------------------------------------------------------|\r\n");
-		sprintf(t_buf, "|                                      WinMTR statistics                                   |\r\n");
-		strcat(f_buf, t_buf);
-		sprintf(t_buf, "|                       Host              -   %%  | Sent | Recv | Best | Avrg | Wrst | Last | StDev| Jttr |\r\n");
-		strcat(f_buf, t_buf);
-		sprintf(t_buf, "|------------------------------------------------|------|------|------|------|------|------|------|------|\r\n");
-		strcat(f_buf, t_buf);
+		out << "Host";
+		for(char code : orderFields) {
+			out << " | " << OrderLabel(code);
+		}
+		if(asnEnabled) {
+			out << " | " << IpinfoLabel(ipinfoMode);
+		}
+		out << "\r\n";
 		
 		for(int i = startIndex; i < nh; i++) {
-			wmtrnet->GetName(i, buf);
-			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
-			
-			sprintf(t_buf, "|%40s - %4d | %4d | %4d | %4d | %4d | %4d | %4d | %4d | %4d |\r\n" ,
-					buf, wmtrnet->GetPercent(i),
-					wmtrnet->GetXmit(i), wmtrnet->GetReturned(i), wmtrnet->GetBest(i),
-					wmtrnet->GetAvg(i), wmtrnet->GetWorst(i), wmtrnet->GetLast(i),
-					wmtrnet->GetStDev(i), wmtrnet->GetJitter(i));
-			strcat(f_buf, t_buf);
+			CString host = FormatHostLabel(i);
+			out << host.GetString();
+			for(char code : orderFields) {
+				CString value = FormatFieldValue(code, i);
+				out << " | " << value.GetString();
+			}
+			if(asnEnabled) {
+				CString value = FormatIpInfo(i);
+				out << " | " << value.GetString();
+			}
+			out << "\r\n";
 		}
-		
-		sprintf(t_buf, "|________________________________________________|______|______|______|______|______|______|______|______|\r\n");
-		strcat(f_buf, t_buf);
-		
-		
-		CString cs_tmp((LPCSTR)IDS_STRING_SB_NAME);
-		strcat(f_buf, "   ");
-		strcat(f_buf, (LPCTSTR)cs_tmp);
 		
 		FILE* fp = fopen(dlg.GetPathName(), "wt");
 		if(fp != NULL) {
-			fprintf(fp, "%s", f_buf);
+			fprintf(fp, "%s", out.str().c_str());
 			fclose(fp);
 		}
 	}
@@ -1231,22 +1265,27 @@ void WinMTRDialog::OnEXPCSV()
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 
 		std::ostringstream csv;
-		csv << "Host,LossPercent,Sent,Recv,Best,Avg,Worst,Last,StDev,Jttr\r\n";
+		csv << "Host";
+		for(char code : orderFields) {
+			csv << "," << OrderLabel(code);
+		}
+		if(asnEnabled) {
+			csv << "," << IpinfoLabel(ipinfoMode);
+		}
+		csv << "\r\n";
 
 		for(int i = startIndex; i < nh; i++) {
-			wmtrnet->GetName(i, buf);
-			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
-
-			csv << EscapeCsvField(buf) << ","
-				<< wmtrnet->GetPercent(i) << ","
-				<< wmtrnet->GetXmit(i) << ","
-				<< wmtrnet->GetReturned(i) << ","
-				<< wmtrnet->GetBest(i) << ","
-				<< wmtrnet->GetAvg(i) << ","
-				<< wmtrnet->GetWorst(i) << ","
-				<< wmtrnet->GetLast(i) << ","
-				<< wmtrnet->GetStDev(i) << ","
-				<< wmtrnet->GetJitter(i) << "\r\n";
+			CString host = FormatHostLabel(i);
+			csv << EscapeCsvField(host.GetString());
+			for(char code : orderFields) {
+				CString value = FormatFieldValue(code, i);
+				csv << "," << EscapeCsvField(value.GetString());
+			}
+			if(asnEnabled) {
+				CString value = FormatIpInfo(i);
+				csv << "," << EscapeCsvField(value.GetString());
+			}
+			csv << "\r\n";
 		}
 
 		FILE* fp = fopen(dlg.GetPathName(), "wt");
@@ -1288,19 +1327,36 @@ void WinMTRDialog::OnEXPH()
 		sprintf(t_buf, "<p align=\"center\"> <table border=\"1\" align=\"center\">\r\n");
 		strcat(f_buf, t_buf);
 		
-		sprintf(t_buf, "<tr><td>Host</td> <td>%%</td> <td>Sent</td> <td>Recv</td> <td>Best</td> <td>Avrg</td> <td>Wrst</td> <td>Last</td> <td>StDev</td> <td>Jttr</td></tr>\r\n");
+		sprintf(t_buf, "<tr><td>Host</td>");
 		strcat(f_buf, t_buf);
+		for(char code : orderFields) {
+			sprintf(t_buf, " <td>%s</td>", OrderLabel(code));
+			strcat(f_buf, t_buf);
+		}
+		if(asnEnabled) {
+			sprintf(t_buf, " <td>%s</td>", IpinfoLabel(ipinfoMode));
+			strcat(f_buf, t_buf);
+		}
+		strcat(f_buf, "</tr>\r\n");
 		
 		for(int i = startIndex; i < nh; i++) {
 			wmtrnet->GetName(i, buf);
 			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
 			
-			sprintf(t_buf, "<tr><td>%s</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td> <td>%4d</td></tr>\r\n" ,
-					buf, wmtrnet->GetPercent(i),
-					wmtrnet->GetXmit(i), wmtrnet->GetReturned(i), wmtrnet->GetBest(i),
-					wmtrnet->GetAvg(i), wmtrnet->GetWorst(i), wmtrnet->GetLast(i),
-					wmtrnet->GetStDev(i), wmtrnet->GetJitter(i));
+			CString host = FormatHostLabel(i);
+			sprintf(t_buf, "<tr><td>%s</td>", host.GetString());
 			strcat(f_buf, t_buf);
+			for(char code : orderFields) {
+				CString value = FormatFieldValue(code, i);
+				sprintf(t_buf, " <td>%s</td>", value.GetString());
+				strcat(f_buf, t_buf);
+			}
+			if(asnEnabled) {
+				CString value = FormatIpInfo(i);
+				sprintf(t_buf, " <td>%s</td>", value.GetString());
+				strcat(f_buf, t_buf);
+			}
+			strcat(f_buf, "</tr>\r\n");
 		}
 		
 		sprintf(t_buf, "</table></body></html>\r\n");
@@ -1344,23 +1400,35 @@ void WinMTRDialog::OnEXPJSON()
 		std::ostringstream json;
 		json << "{\r\n";
 		json << "  \"target\": \"" << EscapeJsonString((LPCTSTR)target) << "\",\r\n";
+		json << "  \"fields\": [";
+		for(size_t f = 0; f < orderFields.size(); ++f) {
+			json << "\"" << OrderLabel(orderFields[f]) << "\"";
+			if(f + 1 < orderFields.size()) json << ", ";
+		}
+		if(asnEnabled) {
+			if(!orderFields.empty()) json << ", ";
+			json << "\"" << IpinfoLabel(ipinfoMode) << "\"";
+		}
+		json << "],\r\n";
 		json << "  \"hops\": [\r\n";
 
 		for(int i = startIndex; i < nh; i++) {
-			wmtrnet->GetName(i, buf);
-			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
+			CString host = FormatHostLabel(i);
 
 			json << "    {\r\n";
-			json << "      \"host\": \"" << EscapeJsonString(buf) << "\",\r\n";
-			json << "      \"lossPercent\": " << wmtrnet->GetPercent(i) << ",\r\n";
-			json << "      \"sent\": " << wmtrnet->GetXmit(i) << ",\r\n";
-			json << "      \"recv\": " << wmtrnet->GetReturned(i) << ",\r\n";
-			json << "      \"best\": " << wmtrnet->GetBest(i) << ",\r\n";
-			json << "      \"avg\": " << wmtrnet->GetAvg(i) << ",\r\n";
-			json << "      \"worst\": " << wmtrnet->GetWorst(i) << ",\r\n";
-			json << "      \"last\": " << wmtrnet->GetLast(i) << ",\r\n";
-			json << "      \"stdev\": " << wmtrnet->GetStDev(i) << ",\r\n";
-			json << "      \"jitter\": " << wmtrnet->GetJitter(i) << "\r\n";
+			json << "      \"host\": \"" << EscapeJsonString(host.GetString()) << "\",\r\n";
+			json << "      \"values\": [";
+			for(size_t f = 0; f < orderFields.size(); ++f) {
+				CString value = FormatFieldValue(orderFields[f], i);
+				json << "\"" << EscapeJsonString(value.GetString()) << "\"";
+				if(f + 1 < orderFields.size()) json << ", ";
+			}
+			if(asnEnabled) {
+				if(!orderFields.empty()) json << ", ";
+				CString value = FormatIpInfo(i);
+				json << "\"" << EscapeJsonString(value.GetString()) << "\"";
+			}
+			json << "]\r\n";
 			json << "    }";
 			if(i < nh - 1) json << ",";
 			json << "\r\n";
@@ -1406,23 +1474,9 @@ int WinMTRDialog::DisplayRedraw()
 	int rowIndex = 0;
 	for(int i = startIndex; i < nh; ++i, ++rowIndex) {
 	
-		wmtrnet->GetName(i, buf);
-		if(!*buf) strcpy(buf,"No response from host");
-
-		if(showIps) {
-			char ipbuf[NI_MAXHOST];
-			if(!getnameinfo(wmtrnet->GetAddr(i), sizeof(sockaddr_in6), ipbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
-				if(strcmp(buf, ipbuf) != 0 && strcmp(buf, "No response from host") != 0) {
-					char combined[255];
-					snprintf(combined, sizeof(combined), "%s (%s)", buf, ipbuf);
-					strncpy(buf, combined, sizeof(buf) - 1);
-					buf[sizeof(buf) - 1] = '\0';
-				} else {
-					strncpy(buf, ipbuf, sizeof(buf) - 1);
-					buf[sizeof(buf) - 1] = '\0';
-				}
-			}
-		}
+		CString hostLabel = FormatHostLabel(i);
+		strncpy(buf, hostLabel, sizeof(buf) - 1);
+		buf[sizeof(buf) - 1] = '\0';
 		
 		sprintf(nr_crt, "%d", i+1);
 		if(m_listMTR.GetItemCount() <= rowIndex)

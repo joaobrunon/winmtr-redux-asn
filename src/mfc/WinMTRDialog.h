@@ -123,6 +123,7 @@ protected:
 	std::vector<char> ParseOrderFields(const std::string& order) const;
 	CString FormatFieldValue(char code, int index) const;
 	CString FormatIpInfo(int index) const;
+	CString FormatHostLabel(int index) const;
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];

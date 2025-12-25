@@ -18,6 +18,9 @@
 #endif
 
 #define VC_EXTRALEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include <afxwin.h>
 #include <afxext.h>
