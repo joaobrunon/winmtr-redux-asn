@@ -195,7 +195,7 @@ void WinMTRNet::ResetHops()
 	memset(host,0,sizeof(host));
 }
 
-void WinMTRNet::DoTrace(sockaddr* sockaddr)
+void WinMTRNet::DoTrace(sockaddr* addr)
 {
 	HANDLE hThreads[MAX_HOPS];
 	unsigned char hops=0;
@@ -207,12 +207,12 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 	if(firstTtl > maxHops) firstTtl = maxHops;
 	tracing = true;
 	ResetHops();
-	if(sockaddr->sa_family==AF_INET6) {
+	if(addr->sa_family==AF_INET6) {
 		host[0].addr6.sin6_family=AF_INET6;
-		last_remote_addr6=((sockaddr_in6*)sockaddr)->sin6_addr;
+		last_remote_addr6=((sockaddr_in6*)addr)->sin6_addr;
 		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {// one thread per TTL value
 			trace_thread6* current=new trace_thread6;
-			current->address=*(sockaddr_in6*)sockaddr;
+			current->address=*(sockaddr_in6*)addr;
 			current->winmtr=this;
 			current->ttl=ttl;
 			hThreads[hops]=(HANDLE)_beginthreadex(NULL,0,TraceThread6,current,0,NULL);
@@ -221,10 +221,10 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 		}
 	} else {
 		host[0].addr.sin_family=AF_INET;
-		last_remote_addr=((sockaddr_in*)sockaddr)->sin_addr;
+		last_remote_addr=((sockaddr_in*)addr)->sin_addr;
 		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {// one thread per TTL value
 			trace_thread* current=new trace_thread;
-			current->address=((sockaddr_in*)sockaddr)->sin_addr;
+			current->address=((sockaddr_in*)addr)->sin_addr;
 			current->winmtr=this;
 			current->ttl=ttl;
 			hThreads[hops]=(HANDLE)_beginthreadex(NULL,0,TraceThread,current,0,NULL);
@@ -236,13 +236,13 @@ void WinMTRNet::DoTrace(sockaddr* sockaddr)
 	for(; hops;) CloseHandle(hThreads[--hops]);
 }
 
-void WinMTRNet::DoTraceTcp(sockaddr_in* sockaddr)
+void WinMTRNet::DoTraceTcp(sockaddr_in* addr)
 {
-	if(!sockaddr) return;
+	if(!addr) return;
 	ResetHops();
 	tracing = true;
 	host[0].addr.sin_family = AF_INET;
-	last_remote_addr = sockaddr->sin_addr;
+	last_remote_addr = addr->sin_addr;
 
 	int maxHops = wmtrdlg->maxHops;
 	if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
@@ -258,7 +258,7 @@ void WinMTRNet::DoTraceTcp(sockaddr_in* sockaddr)
 		return;
 	}
 
-	sockaddr_in destAddr = *sockaddr;
+	sockaddr_in destAddr = *addr;
 	unsigned short destPort = static_cast<unsigned short>(wmtrdlg->port);
 	if(destPort == 0) destPort = DEFAULT_PORT;
 	destAddr.sin_port = htons(destPort);
@@ -372,13 +372,13 @@ void WinMTRNet::DoTraceTcp(sockaddr_in* sockaddr)
 	closesocket(icmpSock);
 }
 
-void WinMTRNet::DoTraceUdp(sockaddr_in* sockaddr)
+void WinMTRNet::DoTraceUdp(sockaddr_in* addr)
 {
-	if(!sockaddr) return;
+	if(!addr) return;
 	ResetHops();
 	tracing = true;
 	host[0].addr.sin_family = AF_INET;
-	last_remote_addr = sockaddr->sin_addr;
+	last_remote_addr = addr->sin_addr;
 
 	int maxHops = wmtrdlg->maxHops;
 	if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
@@ -430,7 +430,7 @@ void WinMTRNet::DoTraceUdp(sockaddr_in* sockaddr)
 			int ttlVal = ttl;
 			setsockopt(udpSock, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&ttlVal), sizeof(ttlVal));
 
-			sockaddr_in destAddr = *sockaddr;
+			sockaddr_in destAddr = *addr;
 			unsigned short destPort = static_cast<unsigned short>(wmtrdlg->port);
 			if(destPort == 0) {
 				destPort = static_cast<unsigned short>(33434 + ttl);

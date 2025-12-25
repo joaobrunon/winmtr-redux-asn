@@ -81,9 +81,9 @@ public:
 
 	WinMTRNet(WinMTRDialog* wp);
 	~WinMTRNet();
-	void	DoTrace(sockaddr* sockaddr);
-	void	DoTraceTcp(sockaddr_in* sockaddr);
-	void	DoTraceUdp(sockaddr_in* sockaddr);
+	void	DoTrace(sockaddr* addr);
+	void	DoTraceTcp(sockaddr_in* addr);
+	void	DoTraceUdp(sockaddr_in* addr);
 	void	ResetHops();
 	void	StopTrace();
 	
