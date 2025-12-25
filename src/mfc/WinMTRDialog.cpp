@@ -15,6 +15,13 @@
 #include <vector>
 #include <algorithm>
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+static const char* IpinfoLabel(int mode);
+static const char* OrderLabel(char code);
+
 #ifdef _DEBUG
 #	define TRACE_MSG(msg)									\
 	{														\
