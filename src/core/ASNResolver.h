@@ -54,6 +54,9 @@ private:
 
     /// Try to resolve using DNS (Team Cymru)
     [[nodiscard]] std::optional<ASNInfo> resolveDNS(const IPv4Address& address);
+
+    /// Resolve ASN organization name (Team Cymru)
+    [[nodiscard]] std::string resolveASNName(uint32_t asn);
 };
 
 } // namespace mtr
