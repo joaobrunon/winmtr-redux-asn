@@ -52,6 +52,7 @@
 #define IDC_EDIT_PORT                   1036
 #define IDC_EDIT_LOCALPORT              1037
 #define IDC_EDIT_ORDER                  1038
+#define ID_STATUS_IPINFO                2000
 
 // Next default values for new objects
 // 

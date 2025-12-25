@@ -14,10 +14,15 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <mutex>
+#include <iphlpapi.h>
+#include <winhttp.h>
 
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+
+#define WM_APP_UPDATE_IPINFO (WM_APP + 1)
 
 static const char* IpinfoLabel(int mode);
 static const char* OrderLabel(char code);
@@ -37,6 +42,7 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 void PingThread(void* p);
+static unsigned WINAPI WanInfoThread(void* p);
 
 static std::string EscapeJsonString(const char* input)
 {
@@ -116,6 +122,122 @@ static const char* OrderLabel(char code)
 	}
 }
 
+static std::string ExtractJsonString(const std::string& json, const char* key)
+{
+	std::string needle = "\"";
+	needle += key;
+	needle += "\"";
+	size_t pos = json.find(needle);
+	if(pos == std::string::npos) return "";
+	pos = json.find(':', pos + needle.size());
+	if(pos == std::string::npos) return "";
+	++pos;
+	while(pos < json.size() && isspace(static_cast<unsigned char>(json[pos]))) {
+		++pos;
+	}
+	if(pos >= json.size() || json[pos] != '\"') return "";
+	++pos;
+	std::string value;
+	while(pos < json.size()) {
+		char ch = json[pos++];
+		if(ch == '\\\\') {
+			if(pos < json.size()) {
+				value.push_back(json[pos++]);
+			}
+			continue;
+		}
+		if(ch == '\"') break;
+		value.push_back(ch);
+	}
+	return value;
+}
+
+static std::string ExtractAsnFromOrg(const std::string& org)
+{
+	size_t pos = org.find("AS");
+	if(pos == std::string::npos) return "";
+	size_t start = pos;
+	pos += 2;
+	while(pos < org.size() && isdigit(static_cast<unsigned char>(org[pos]))) {
+		++pos;
+	}
+	if(pos == start + 2) return "";
+	return org.substr(start, pos - start);
+}
+
+static bool HttpGet(const wchar_t* host, const wchar_t* path, std::string& out)
+{
+	out.clear();
+	HINTERNET session = WinHttpOpen(L"WinMTR/1.0",
+		WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+		WINHTTP_NO_PROXY_NAME,
+		WINHTTP_NO_PROXY_BYPASS,
+		0);
+	if(!session) return false;
+
+	WinHttpSetTimeouts(session, 3000, 3000, 3000, 3000);
+
+	HINTERNET connect = WinHttpConnect(session, host, INTERNET_DEFAULT_HTTPS_PORT, 0);
+	if(!connect) {
+		WinHttpCloseHandle(session);
+		return false;
+	}
+
+	HINTERNET request = WinHttpOpenRequest(connect, L"GET", path,
+		NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+		WINHTTP_FLAG_SECURE);
+	if(!request) {
+		WinHttpCloseHandle(connect);
+		WinHttpCloseHandle(session);
+		return false;
+	}
+
+	BOOL sent = WinHttpSendRequest(request,
+		WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+		WINHTTP_NO_REQUEST_DATA, 0,
+		0, 0);
+	if(sent) {
+		sent = WinHttpReceiveResponse(request, NULL);
+	}
+	if(!sent) {
+		WinHttpCloseHandle(request);
+		WinHttpCloseHandle(connect);
+		WinHttpCloseHandle(session);
+		return false;
+	}
+
+	DWORD size = 0;
+	do {
+		if(!WinHttpQueryDataAvailable(request, &size)) break;
+		if(size == 0) break;
+		std::string buffer;
+		buffer.resize(size);
+		DWORD read = 0;
+		if(!WinHttpReadData(request, &buffer[0], size, &read)) break;
+		out.append(buffer.data(), read);
+	} while(size > 0);
+
+	WinHttpCloseHandle(request);
+	WinHttpCloseHandle(connect);
+	WinHttpCloseHandle(session);
+
+	return !out.empty();
+}
+
+static bool TryFetchWanInfo(const wchar_t* host, const wchar_t* path, std::string& ip, std::string& asn, std::string& org)
+{
+	std::string json;
+	if(!HttpGet(host, path, json)) return false;
+
+	ip = ExtractJsonString(json, "ip");
+	asn = ExtractJsonString(json, "asn");
+	org = ExtractJsonString(json, "org");
+	if(asn.empty() && !org.empty()) {
+		asn = ExtractAsnFromOrg(org);
+	}
+	return !ip.empty();
+}
+
 //*****************************************************************************
 // BEGIN_MESSAGE_MAP
 //
@@ -142,6 +264,7 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_WM_TIMER()
 	ON_WM_CLOSE()
 	ON_BN_CLICKED(IDCANCEL, &WinMTRDialog::OnBnClickedCancel)
+	ON_MESSAGE(WM_APP_UPDATE_IPINFO, &WinMTRDialog::OnUpdateIpInfo)
 END_MESSAGE_MAP()
 
 
@@ -174,6 +297,12 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	ipinfoMode = 0;
 	showIps = false;
 	paused = false;
+	localIpv4 = "";
+	localIpv6 = "";
+	wanIpv4 = "";
+	wanIpv6 = "";
+	wanAsn = "";
+	wanInfoThread = NULL;
 	nrLRU = 0;
 	
 	hasIntervalFromCmdLine = false;
@@ -251,15 +380,23 @@ BOOL WinMTRDialog::OnInitDialog()
 	sbi[0] = IDS_STRING_SB_NAME;
 	statusBar.SetIndicators(sbi,1);
 	statusBar.SetPaneInfo(0, statusBar.GetItemID(0),SBPS_STRETCH, NULL);
+
+	if(statusBar.AddPane(ID_STATUS_IPINFO, 1)) {
+		statusBar.SetPaneWidth(statusBar.CommandToIndex(ID_STATUS_IPINFO), 450);
+	}
 	
 	// create Appnor button
 	if(m_buttonAppnor.Create(_T("www.appnor.com"), WS_CHILD|WS_VISIBLE|WS_TABSTOP, CRect(0,0,0,0), &statusBar, 1234)) {
 		m_buttonAppnor.SetURL("http://appnor.com/?utm_source=winmtr&utm_medium=desktop&utm_campaign=software");
-		if(statusBar.AddPane(1234,1)) {
+		if(statusBar.AddPane(1234,2)) {
 			statusBar.SetPaneWidth(statusBar.CommandToIndex(1234),100);
 			statusBar.AddPaneControl(m_buttonAppnor,1234,true);
 		}
 	}
+
+	RefreshLocalIpInfo();
+	UpdateIpInfoStatusBar();
+	StartWanInfoRefresh();
 	
 	m_comboHost.SetFocus();
 	
@@ -475,6 +612,112 @@ CString WinMTRDialog::FormatHostLabel(int index) const
 	}
 
 	return CString(buf);
+}
+
+void WinMTRDialog::RefreshLocalIpInfo()
+{
+	std::string v4;
+	std::string v6;
+	std::string v6LinkLocal;
+
+	ULONG size = 0;
+	DWORD flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
+	DWORD res = GetAdaptersAddresses(AF_UNSPEC, flags, NULL, NULL, &size);
+	if(res != ERROR_BUFFER_OVERFLOW || size == 0) {
+		return;
+	}
+
+	std::vector<unsigned char> buffer(size);
+	IP_ADAPTER_ADDRESSES* addrs = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data());
+	if(GetAdaptersAddresses(AF_UNSPEC, flags, NULL, addrs, &size) != NO_ERROR) {
+		return;
+	}
+
+	for(IP_ADAPTER_ADDRESSES* aa = addrs; aa; aa = aa->Next) {
+		if(aa->OperStatus != IfOperStatusUp) continue;
+		for(IP_ADAPTER_UNICAST_ADDRESS* ua = aa->FirstUnicastAddress; ua; ua = ua->Next) {
+			if(!ua->Address.lpSockaddr) continue;
+			if(ua->Address.lpSockaddr->sa_family == AF_INET) {
+				sockaddr_in* sa = reinterpret_cast<sockaddr_in*>(ua->Address.lpSockaddr);
+				ULONG addr = ntohl(sa->sin_addr.s_addr);
+				if((addr >> 24) == 127) continue;
+				if((addr >> 16) == 0xA9FE) continue;
+				char buf[INET_ADDRSTRLEN] = {};
+				if(inet_ntop(AF_INET, &sa->sin_addr, buf, sizeof(buf)) && v4.empty()) {
+					v4 = buf;
+				}
+			} else if(ua->Address.lpSockaddr->sa_family == AF_INET6) {
+				sockaddr_in6* sa6 = reinterpret_cast<sockaddr_in6*>(ua->Address.lpSockaddr);
+				if(IN6_IS_ADDR_LOOPBACK(&sa6->sin6_addr)) continue;
+				char buf[INET6_ADDRSTRLEN] = {};
+				if(inet_ntop(AF_INET6, &sa6->sin6_addr, buf, sizeof(buf))) {
+					if(IN6_IS_ADDR_LINKLOCAL(&sa6->sin6_addr)) {
+						if(v6LinkLocal.empty()) v6LinkLocal = buf;
+					} else if(v6.empty()) {
+						v6 = buf;
+					}
+				}
+			}
+		}
+	}
+
+	if(v6.empty()) v6 = v6LinkLocal;
+
+	std::lock_guard<std::mutex> lock(ipInfoMutex);
+	localIpv4 = v4.c_str();
+	localIpv6 = v6.c_str();
+}
+
+void WinMTRDialog::UpdateIpInfoStatusBar()
+{
+	CString v4;
+	CString v6;
+	CString w4;
+	CString w6;
+	CString asn;
+	{
+		std::lock_guard<std::mutex> lock(ipInfoMutex);
+		v4 = localIpv4;
+		v6 = localIpv6;
+		w4 = wanIpv4;
+		w6 = wanIpv6;
+		asn = wanAsn;
+	}
+
+	CString info;
+	auto append = [&](const char* label, const CString& value) {
+		if(value.IsEmpty()) return;
+		if(!info.IsEmpty()) info += " | ";
+		info += label;
+		info += value;
+	};
+
+	append("LAN: ", v4);
+	append("LAN6: ", v6);
+	append("WAN: ", w4);
+	append("WAN6: ", w6);
+	append("ASN: ", asn);
+
+	if(info.IsEmpty()) info = "IP info unavailable";
+
+	int paneIndex = statusBar.CommandToIndex(ID_STATUS_IPINFO);
+	if(paneIndex >= 0) {
+		statusBar.SetPaneText(paneIndex, info);
+	}
+}
+
+void WinMTRDialog::StartWanInfoRefresh()
+{
+	std::lock_guard<std::mutex> lock(ipInfoMutex);
+	if(wanInfoThread) return;
+	unsigned int tid = 0;
+	wanInfoThread = reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, WanInfoThread, this, 0, &tid));
+}
+
+LRESULT WinMTRDialog::OnUpdateIpInfo(WPARAM, LPARAM)
+{
+	UpdateIpInfoStatusBar();
+	return 0;
 }
 
 
@@ -1637,6 +1880,59 @@ void PingThread(void* p)
 	}
 	freeaddrinfo(anfo);
 	ReleaseMutex(wmtrdlg->traceThreadMutex);
+}
+
+static unsigned WINAPI WanInfoThread(void* p)
+{
+	WinMTRDialog* dlg = reinterpret_cast<WinMTRDialog*>(p);
+	std::string v4;
+	std::string v6;
+	std::string asn;
+
+	std::string ip;
+	std::string asnTmp;
+	std::string orgTmp;
+
+	if(TryFetchWanInfo(L"ipinfo.io", L"/json", ip, asnTmp, orgTmp) ||
+	   TryFetchWanInfo(L"ipapi.co", L"/json/", ip, asnTmp, orgTmp)) {
+		v4 = ip;
+		if(!orgTmp.empty()) {
+			asn = orgTmp;
+		} else {
+			asn = asnTmp;
+		}
+	}
+
+	ip.clear();
+	asnTmp.clear();
+	orgTmp.clear();
+
+	if(TryFetchWanInfo(L"v6.ipinfo.io", L"/json", ip, asnTmp, orgTmp) ||
+	   TryFetchWanInfo(L"v6.ifconfig.co", L"/json", ip, asnTmp, orgTmp)) {
+		v6 = ip;
+		if(asn.empty()) {
+			if(!orgTmp.empty()) {
+				asn = orgTmp;
+			} else {
+				asn = asnTmp;
+			}
+		}
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(dlg->ipInfoMutex);
+		dlg->wanIpv4 = v4.c_str();
+		dlg->wanIpv6 = v6.c_str();
+		dlg->wanAsn = asn.c_str();
+		HANDLE threadHandle = dlg->wanInfoThread;
+		dlg->wanInfoThread = NULL;
+		if(threadHandle) CloseHandle(threadHandle);
+	}
+
+	if(dlg->m_hWnd) {
+		PostMessage(dlg->m_hWnd, WM_APP_UPDATE_IPINFO, 0, 0);
+	}
+	return 0;
 }
 
 

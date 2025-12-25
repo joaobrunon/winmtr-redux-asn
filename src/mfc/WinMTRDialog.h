@@ -20,6 +20,7 @@
 #include "afxlinkctrl.h"
 #include <string>
 #include <vector>
+#include <mutex>
 
 //*****************************************************************************
 // CLASS:  WinMTRDialog
@@ -109,6 +110,13 @@ public:
 	unsigned char		useIPv6;
 	bool				hasUseIPv6FromCmdLine;
 	WinMTRNet*			wmtrnet;
+	std::mutex			ipInfoMutex;
+	CString				localIpv4;
+	CString				localIpv6;
+	CString				wanIpv4;
+	CString				wanIpv6;
+	CString				wanAsn;
+	HANDLE				wanInfoThread;
 	
 	void SetHostName(const char* host);
 	void SetInterval(float i);
@@ -124,6 +132,10 @@ protected:
 	CString FormatFieldValue(char code, int index) const;
 	CString FormatIpInfo(int index) const;
 	CString FormatHostLabel(int index) const;
+	void RefreshLocalIpInfo();
+	void StartWanInfoRefresh();
+	void UpdateIpInfoStatusBar();
+	afx_msg LRESULT OnUpdateIpInfo(WPARAM wParam, LPARAM lParam);
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];

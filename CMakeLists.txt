@@ -170,6 +170,7 @@ if(BUILD_WITH_MFC AND WIN32)
     target_link_libraries(WinMTR_MFC PRIVATE
         ws2_32
         iphlpapi
+        winhttp
     )
 
     # Can optionally use new core
