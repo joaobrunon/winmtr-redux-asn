@@ -7,6 +7,9 @@
 #include "WinMTRDialog.h"
 #include <iostream>
 #include <sstream>
+#include <array>
+#include <cstring>
+#include <string>
 
 #ifdef _DEBUG
 #	define TRACE_MSG(msg)										\
@@ -59,6 +62,35 @@ static bool ParseIcmpTimeExceeded(const unsigned char* buffer, int length, unsig
 	memcpy(&destPortNet, tcpHeader + 2, sizeof(destPortNet));
 	unsigned short destPort = ntohs(destPortNet);
 	return destPort == expectedPort;
+}
+
+static void CopyToBuffer(char* dst, size_t size, const std::string& src)
+{
+	if(size == 0) return;
+	std::strncpy(dst, src.c_str(), size - 1);
+	dst[size - 1] = '\0';
+}
+
+static int ParseIcmpUdp(const unsigned char* buffer, int length, unsigned short expectedPort)
+{
+	if(length < 28) return 0;
+	unsigned char ipHeaderLen = (buffer[0] & 0x0F) * 4;
+	if(length < ipHeaderLen + 8) return 0;
+	unsigned char icmpType = buffer[ipHeaderLen];
+	unsigned char icmpCode = buffer[ipHeaderLen + 1];
+	if(icmpType != 11 && icmpType != 3) return 0;
+	const unsigned char* innerIp = buffer + ipHeaderLen + 8;
+	if(innerIp + 20 > buffer + length) return 0;
+	unsigned char innerHeaderLen = (innerIp[0] & 0x0F) * 4;
+	if(innerIp + innerHeaderLen + 8 > buffer + length) return 0;
+	if(innerIp[9] != IPPROTO_UDP) return 0;
+	const unsigned char* udpHeader = innerIp + innerHeaderLen;
+	unsigned short destPortNet = 0;
+	memcpy(&destPortNet, udpHeader + 2, sizeof(destPortNet));
+	unsigned short destPort = ntohs(destPortNet);
+	if(destPort != expectedPort) return 0;
+	if(icmpType == 3 && icmpCode == 3) return 2; // port unreachable
+	return 1; // time exceeded or other unreachable
 }
 
 WinMTRNet::WinMTRNet(WinMTRDialog* wp)
@@ -337,6 +369,144 @@ void WinMTRNet::DoTraceTcp(sockaddr_in* sockaddr)
 	closesocket(icmpSock);
 }
 
+void WinMTRNet::DoTraceUdp(sockaddr_in* sockaddr)
+{
+	if(!sockaddr) return;
+	ResetHops();
+	tracing = true;
+	host[0].addr.sin_family = AF_INET;
+	last_remote_addr = sockaddr->sin_addr;
+
+	int maxHops = wmtrdlg->maxHops;
+	if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
+	if(maxHops > MAX_HOPS) maxHops = MAX_HOPS;
+	int firstTtl = wmtrdlg->firstTtl;
+	if(firstTtl <= 0) firstTtl = 1;
+	if(firstTtl > maxHops) firstTtl = maxHops;
+
+	SOCKET icmpSock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if(icmpSock == INVALID_SOCKET) {
+		AfxMessageBox("Failed to create raw ICMP socket for UDP mode.");
+		tracing = false;
+		return;
+	}
+
+	SOCKET udpSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if(udpSock == INVALID_SOCKET) {
+		closesocket(icmpSock);
+		AfxMessageBox("Failed to create UDP socket.");
+		tracing = false;
+		return;
+	}
+
+	if(wmtrdlg->tos >= 0) {
+		int tos = wmtrdlg->tos;
+		setsockopt(udpSock, IPPROTO_IP, IP_TOS, reinterpret_cast<const char*>(&tos), sizeof(tos));
+	}
+
+	if(wmtrdlg->localPort >= 0) {
+		sockaddr_in bindAddr{};
+		bindAddr.sin_family = AF_INET;
+		bindAddr.sin_port = htons(static_cast<unsigned short>(wmtrdlg->localPort));
+		bindAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		bind(udpSock, reinterpret_cast<sockaddr*>(&bindAddr), sizeof(bindAddr));
+	}
+
+	int finalHop = -1;
+	while(tracing) {
+		for(int ttl = firstTtl; ttl <= maxHops; ++ttl) {
+			if(!tracing) break;
+			while(wmtrdlg->paused && tracing) {
+				Sleep(100);
+			}
+
+			if(finalHop > 0 && ttl > finalHop) break;
+
+			AddXmit(ttl - 1);
+
+			int ttlVal = ttl;
+			setsockopt(udpSock, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&ttlVal), sizeof(ttlVal));
+
+			sockaddr_in destAddr = *sockaddr;
+			unsigned short destPort = static_cast<unsigned short>(wmtrdlg->port);
+			if(destPort == 0) {
+				destPort = static_cast<unsigned short>(33434 + ttl);
+			}
+			destAddr.sin_port = htons(destPort);
+
+			char payload[512];
+			int payloadSize = wmtrdlg->pingsize;
+			if(payloadSize < 1) payloadSize = 1;
+			if(payloadSize > static_cast<int>(sizeof(payload))) payloadSize = sizeof(payload);
+			memset(payload, 0x42, payloadSize);
+			if(wmtrdlg->bitPattern >= 0) {
+				int pattern = wmtrdlg->bitPattern;
+				if(pattern > 255) pattern = rand() % 256;
+				memset(payload, pattern, payloadSize);
+			}
+
+			DWORD startTick = GetTickCount();
+			sendto(udpSock, payload, payloadSize, 0, reinterpret_cast<sockaddr*>(&destAddr), sizeof(destAddr));
+
+			bool gotReply = false;
+			sockaddr_in replyAddr{};
+			int rtt = 0;
+			bool reachedDest = false;
+
+			while(true) {
+				DWORD nowTick = GetTickCount();
+				DWORD elapsed = nowTick - startTick;
+				if(elapsed >= static_cast<DWORD>(wmtrdlg->timeoutMs)) {
+					break;
+				}
+				int remainingMs = wmtrdlg->timeoutMs - static_cast<int>(elapsed);
+				timeval tv{};
+				tv.tv_sec = remainingMs / 1000;
+				tv.tv_usec = (remainingMs % 1000) * 1000;
+
+				fd_set readfds;
+				FD_ZERO(&readfds);
+				FD_SET(icmpSock, &readfds);
+
+				int ready = select(0, &readfds, NULL, NULL, &tv);
+				if(ready <= 0) break;
+
+				if(FD_ISSET(icmpSock, &readfds)) {
+					unsigned char buffer[512];
+					sockaddr_in fromAddr{};
+					int fromLen = sizeof(fromAddr);
+					int recvLen = recvfrom(icmpSock, reinterpret_cast<char*>(buffer), sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
+					if(recvLen > 0) {
+						int match = ParseIcmpUdp(buffer, recvLen, destPort);
+						if(match > 0) {
+							rtt = static_cast<int>(GetTickCount() - startTick);
+							replyAddr = fromAddr;
+							gotReply = true;
+							reachedDest = (match == 2);
+							break;
+						}
+					}
+				}
+			}
+
+			if(gotReply) {
+				UpdateRTT(ttl - 1, rtt);
+				AddReturned(ttl - 1);
+				SetAddr(ttl - 1, replyAddr.sin_addr.s_addr);
+				if(reachedDest && finalHop <= 0) finalHop = ttl;
+			}
+
+			Sleep(30);
+		}
+
+		if(!tracing) break;
+		Sleep(static_cast<DWORD>(wmtrdlg->interval * 1000));
+	}
+
+	closesocket(udpSock);
+	closesocket(icmpSock);
+}
+
 void WinMTRNet::StopTrace()
 {
 	tracing = false;
@@ -531,6 +701,94 @@ int WinMTRNet::GetJitter(int at)
 	ReleaseMutex(ghMutex);
 	return ret;
 }
+
+int WinMTRNet::GetDrop(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	int ret = host[at].xmit - host[at].returned;
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+int WinMTRNet::GetGmean(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	double ret = 0.0;
+	if(host[at].rttLogSamples > 0) {
+		ret = exp(host[at].rttLogSum / host[at].rttLogSamples);
+	}
+	ReleaseMutex(ghMutex);
+	return static_cast<int>(ret);
+}
+
+int WinMTRNet::GetJitterAvg(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	int ret = static_cast<int>(host[at].jitterMean);
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+int WinMTRNet::GetJitterMax(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	int ret = host[at].jitterMax;
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+int WinMTRNet::GetJitterInt(int at)
+{
+	return GetJitterAvg(at);
+}
+
+const char* WinMTRNet::GetASN(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].asn : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+const char* WinMTRNet::GetOrg(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].org : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+const char* WinMTRNet::GetPrefix(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].prefix : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+const char* WinMTRNet::GetCountry(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].country : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+const char* WinMTRNet::GetRegistry(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].registry : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
+
+const char* WinMTRNet::GetAllocated(int at)
+{
+	WaitForSingleObject(ghMutex, INFINITE);
+	const char* ret = host[at].asnValid ? host[at].allocated : "";
+	ReleaseMutex(ghMutex);
+	return ret;
+}
 int WinMTRNet::GetPercent(int at)
 {
 	WaitForSingleObject(ghMutex, INFINITE);
@@ -596,6 +854,21 @@ void WinMTRNet::SetAddr(int at, u_long addr)
 		dnt->winmtr=this;
 		if(wmtrdlg->useDNS) _beginthread(DnsResolverThread, 0, dnt);
 		else DnsResolverThread(dnt);
+		if(wmtrdlg->asnEnabled) {
+			mtr::IPv4Address ip(ntohl(addr));
+			auto info = asnResolver.resolve(mtr::NetworkAddress{ip});
+			if(info) {
+				host[at].asnValid = true;
+				CopyToBuffer(host[at].asn, sizeof(host[at].asn), "AS" + std::to_string(info->number));
+				CopyToBuffer(host[at].org, sizeof(host[at].org), info->organization);
+				CopyToBuffer(host[at].prefix, sizeof(host[at].prefix), info->prefix);
+				CopyToBuffer(host[at].country, sizeof(host[at].country), info->country);
+				CopyToBuffer(host[at].registry, sizeof(host[at].registry), info->registry);
+				CopyToBuffer(host[at].allocated, sizeof(host[at].allocated), info->allocated);
+			} else {
+				host[at].asnValid = false;
+			}
+		}
 	}
 	ReleaseMutex(ghMutex);
 }
@@ -612,6 +885,23 @@ void WinMTRNet::SetAddr6(int at, IPV6_ADDRESS_EX addrex)
 		dnt->winmtr=this;
 		if(wmtrdlg->useDNS) _beginthread(DnsResolverThread,0,dnt);
 		else DnsResolverThread(dnt);
+		if(wmtrdlg->asnEnabled) {
+			std::array<uint8_t, 16> bytes{};
+			std::memcpy(bytes.data(), addrex.sin6_addr, 16);
+			mtr::IPv6Address ip(bytes);
+			auto info = asnResolver.resolve(mtr::NetworkAddress{ip});
+			if(info) {
+				host[at].asnValid = true;
+				CopyToBuffer(host[at].asn, sizeof(host[at].asn), "AS" + std::to_string(info->number));
+				CopyToBuffer(host[at].org, sizeof(host[at].org), info->organization);
+				CopyToBuffer(host[at].prefix, sizeof(host[at].prefix), info->prefix);
+				CopyToBuffer(host[at].country, sizeof(host[at].country), info->country);
+				CopyToBuffer(host[at].registry, sizeof(host[at].registry), info->registry);
+				CopyToBuffer(host[at].allocated, sizeof(host[at].allocated), info->allocated);
+			} else {
+				host[at].asnValid = false;
+			}
+		}
 	}
 	ReleaseMutex(ghMutex);
 }
@@ -696,6 +986,10 @@ void WinMTRNet::UpdateRTT(int at, int rtt)
 	host[at].rttMean += delta / count;
 	double delta2 = rtt - host[at].rttMean;
 	host[at].rttM2 += delta * delta2;
+	if(rtt > 0) {
+		host[at].rttLogSum += log(static_cast<double>(rtt));
+		host[at].rttLogSamples += 1;
+	}
 	ReleaseMutex(ghMutex);
 }
 
@@ -730,11 +1024,3 @@ void DnsResolverThread(void* p)
 	}
 	delete p;
 }
-
-
-
-
-
-
-
-

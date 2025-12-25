@@ -43,6 +43,7 @@ void WinMTROptions::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDIT_BITPATTERN, m_editBitPattern);
 	DDX_Control(pDX, IDC_EDIT_PORT, m_editPort);
 	DDX_Control(pDX, IDC_EDIT_LOCALPORT, m_editLocalPort);
+	DDX_Control(pDX, IDC_EDIT_ORDER, m_editOrder);
 	DDX_Control(pDX, IDC_CHECK_DNS, m_checkDNS);
 	DDX_Control(pDX, IDC_COMBO_MODE, m_comboMode);
 }
@@ -90,6 +91,8 @@ BOOL WinMTROptions::OnInitDialog()
 
 	sprintf(strtmp, "%d", localPort);
 	m_editLocalPort.SetWindowText(strtmp);
+
+	m_editOrder.SetWindowText(order.c_str());
 
 	m_comboMode.ResetContent();
 	m_comboMode.AddString("ICMP");
@@ -145,6 +148,10 @@ void WinMTROptions::OnOK()
 
 	m_editLocalPort.GetWindowText(tmpstr, 20);
 	localPort = atoi(tmpstr);
+
+	char orderStr[128];
+	m_editOrder.GetWindowText(orderStr, sizeof(orderStr));
+	order = orderStr;
 
 	CDialog::OnOK();
 }

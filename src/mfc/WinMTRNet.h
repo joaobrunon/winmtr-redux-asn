@@ -13,6 +13,7 @@
 #ifndef WINMTRNET_H_
 #define WINMTRNET_H_
 
+#include "ASNResolver.h"
 
 class WinMTRDialog;
 
@@ -38,12 +39,21 @@ struct s_nethost {
 	int worst;			// worst time
 	double rttMean;		// running mean
 	double rttM2;		// variance accumulator
+	double rttLogSum;	// log sum for geo mean
+	int rttLogSamples;	// geo mean samples
 	int prev;				// previous rtt
 	bool hasPrev;		// has previous rtt
 	int jitterCurrent;	// current jitter
 	double jitterMean;	// mean jitter
 	int jitterMax;		// worst jitter
 	int jitterSamples;	// jitter samples
+	bool asnValid;		// ASN resolved?
+	char asn[32];
+	char org[128];
+	char prefix[64];
+	char country[8];
+	char registry[16];
+	char allocated[16];
 	char name[255];
 };
 
@@ -71,6 +81,7 @@ public:
 	~WinMTRNet();
 	void	DoTrace(sockaddr* sockaddr);
 	void	DoTraceTcp(sockaddr_in* sockaddr);
+	void	DoTraceUdp(sockaddr_in* sockaddr);
 	void	ResetHops();
 	void	StopTrace();
 	
@@ -81,6 +92,17 @@ public:
 	int		GetAvg(int at);
 	int		GetStDev(int at);
 	int		GetJitter(int at);
+	int		GetDrop(int at);
+	int		GetGmean(int at);
+	int		GetJitterAvg(int at);
+	int		GetJitterMax(int at);
+	int		GetJitterInt(int at);
+	const char* GetASN(int at);
+	const char* GetOrg(int at);
+	const char* GetPrefix(int at);
+	const char* GetCountry(int at);
+	const char* GetRegistry(int at);
+	const char* GetAllocated(int at);
 	int		GetPercent(int at);
 	int		GetLast(int at);
 	int		GetReturned(int at);
@@ -112,6 +134,7 @@ public:
 	//IPv6
 	LPFNICMP6CREATEFILE lpfnIcmp6CreateFile;
 	LPFNICMP6SENDECHO2 lpfnIcmp6SendEcho2;
+	mtr::ASNResolver		asnResolver;
 private:
 	HINSTANCE			hICMP_DLL;
 	

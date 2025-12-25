@@ -13,6 +13,7 @@
 #ifndef WINMTROPTIONS_H_
 #define WINMTROPTIONS_H_
 
+#include <string>
 
 
 //*****************************************************************************
@@ -36,6 +37,7 @@ public:
 	              int mode,
 	              int port,
 	              int localPort,
+	              const std::string& order,
 	              CWnd* pParent=NULL) :
 		interval(interval),
 		pingsize(pingsize),
@@ -49,6 +51,7 @@ public:
 		mode(mode),
 		port(port),
 		localPort(localPort),
+		order(order),
 		CDialog(WinMTROptions::IDD, pParent) {};
 		
 	double GetInterval()			{ return interval; };
@@ -63,6 +66,7 @@ public:
 	int GetMode()					{ return mode; };
 	int GetPort()					{ return port; };
 	int GetLocalPort()				{ return localPort; };
+	std::string GetOrder()			{ return order; };
 	
 	enum { IDD = IDD_DIALOG_OPTIONS };
 	CEdit	m_editSize;
@@ -75,6 +79,7 @@ public:
 	CEdit	m_editBitPattern;
 	CEdit	m_editPort;
 	CEdit	m_editLocalPort;
+	CEdit	m_editOrder;
 	CButton	m_checkDNS;
 	CComboBox m_comboMode;
 	
@@ -101,6 +106,7 @@ private:
 	int		mode;
 	int		port;
 	int		localPort;
+	std::string order;
 };
 
 #endif // ifndef WINMTROPTIONS_H_

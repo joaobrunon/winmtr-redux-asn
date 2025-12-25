@@ -12,6 +12,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
+#include <algorithm>
 
 #ifdef _DEBUG
 #	define TRACE_MSG(msg)									\
@@ -127,6 +129,9 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	probeMode = 0;
 	port = DEFAULT_PORT;
 	localPort = DEFAULT_LOCALPORT;
+	orderString = "LRS N BAWV";
+	asnEnabled = true;
+	ipinfoMode = 0;
 	showIps = false;
 	paused = false;
 	nrLRU = 0;
@@ -216,9 +221,6 @@ BOOL WinMTRDialog::OnInitDialog()
 		}
 	}
 	
-	for(int i = 0; i< MTR_NR_COLS; i++)
-		m_listMTR.InsertColumn(i, MTR_COLS[i], LVCFMT_LEFT, MTR_COL_LENGTH[i] , -1);
-		
 	m_comboHost.SetFocus();
 	
 	// We need to resize the dialog to make room for control bars.
@@ -256,6 +258,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST, 0);
 	
 	InitRegistry();
+	ApplyColumnOrder();
 	
 	if(m_autostart) {
 		m_comboHost.SetWindowText(msz_defaulthostname);
@@ -263,6 +266,166 @@ BOOL WinMTRDialog::OnInitDialog()
 	}
 	
 	return FALSE;
+}
+
+std::vector<char> WinMTRDialog::ParseOrderFields(const std::string& order) const
+{
+	std::vector<char> fields;
+	for(char ch : order) {
+		if(isspace(static_cast<unsigned char>(ch))) continue;
+		char up = static_cast<char>(toupper(static_cast<unsigned char>(ch)));
+		switch(up) {
+		case 'L': case 'D': case 'R': case 'S':
+		case 'N': case 'B': case 'A': case 'W':
+		case 'V': case 'G': case 'J': case 'M':
+		case 'X': case 'I':
+			fields.push_back(up);
+			break;
+		default:
+			break;
+		}
+	}
+	if(fields.empty()) {
+		fields.push_back('L');
+		fields.push_back('R');
+		fields.push_back('S');
+		fields.push_back('N');
+		fields.push_back('B');
+		fields.push_back('A');
+		fields.push_back('W');
+		fields.push_back('V');
+	}
+	return fields;
+}
+
+void WinMTRDialog::ApplyColumnOrder()
+{
+	orderFields = ParseOrderFields(orderString);
+	while(m_listMTR.DeleteColumn(0)) {}
+	m_listMTR.DeleteAllItems();
+
+	m_listMTR.InsertColumn(0, "Host", LVCFMT_LEFT, 220, -1);
+	m_listMTR.InsertColumn(1, "Nr", LVCFMT_LEFT, 30, -1);
+
+	auto addColumn = [&](const char* name, int width) {
+		int index = m_listMTR.GetHeaderCtrl()->GetItemCount();
+		m_listMTR.InsertColumn(index, name, LVCFMT_RIGHT, width, -1);
+	};
+
+	for(char code : orderFields) {
+		switch(code) {
+		case 'L': addColumn("Loss %", 50); break;
+		case 'D': addColumn("Drop", 50); break;
+		case 'R': addColumn("Recv", 50); break;
+		case 'S': addColumn("Sent", 50); break;
+		case 'N': addColumn("Last", 50); break;
+		case 'B': addColumn("Best", 50); break;
+		case 'A': addColumn("Avg", 50); break;
+		case 'W': addColumn("Wrst", 50); break;
+		case 'V': addColumn("StDev", 50); break;
+		case 'G': addColumn("Gmean", 50); break;
+		case 'J': addColumn("Jttr", 50); break;
+		case 'M': addColumn("Javg", 50); break;
+		case 'X': addColumn("Jmax", 50); break;
+		case 'I': addColumn("Jint", 50); break;
+		default: break;
+		}
+	}
+	if(asnEnabled) {
+		addColumn(IpinfoLabel(ipinfoMode), 120);
+	}
+}
+
+CString WinMTRDialog::FormatFieldValue(char code, int index) const
+{
+	char buf[32];
+	switch(code) {
+	case 'L':
+		sprintf(buf, "%d", wmtrnet->GetPercent(index));
+		break;
+	case 'D':
+		sprintf(buf, "%d", wmtrnet->GetDrop(index));
+		break;
+	case 'R':
+		sprintf(buf, "%d", wmtrnet->GetReturned(index));
+		break;
+	case 'S':
+		sprintf(buf, "%d", wmtrnet->GetXmit(index));
+		break;
+	case 'N':
+		sprintf(buf, "%d", wmtrnet->GetLast(index));
+		break;
+	case 'B':
+		sprintf(buf, "%d", wmtrnet->GetBest(index));
+		break;
+	case 'A':
+		sprintf(buf, "%d", wmtrnet->GetAvg(index));
+		break;
+	case 'W':
+		sprintf(buf, "%d", wmtrnet->GetWorst(index));
+		break;
+	case 'V':
+		sprintf(buf, "%d", wmtrnet->GetStDev(index));
+		break;
+	case 'G':
+		sprintf(buf, "%d", wmtrnet->GetGmean(index));
+		break;
+	case 'J':
+		sprintf(buf, "%d", wmtrnet->GetJitter(index));
+		break;
+	case 'M':
+		sprintf(buf, "%d", wmtrnet->GetJitterAvg(index));
+		break;
+	case 'X':
+		sprintf(buf, "%d", wmtrnet->GetJitterMax(index));
+		break;
+	case 'I':
+		sprintf(buf, "%d", wmtrnet->GetJitterInt(index));
+		break;
+	default:
+		buf[0] = '\0';
+		break;
+	}
+	return CString(buf);
+}
+
+CString WinMTRDialog::FormatIpInfo(int index) const
+{
+	if(!asnEnabled) {
+		return CString("-");
+	}
+	const char* asn = wmtrnet->GetASN(index);
+	if(!asn || !*asn) {
+		return (ipinfoMode == 0) ? CString("AS???") : CString("???");
+	}
+	switch(ipinfoMode) {
+	case 0: {
+		const char* org = wmtrnet->GetOrg(index);
+		if(org && *org) {
+			CString out;
+			out.Format("%s %s", asn, org);
+			return out;
+		}
+		return CString(asn);
+	}
+	case 1: return CString(wmtrnet->GetPrefix(index));
+	case 2: return CString(wmtrnet->GetCountry(index));
+	case 3: return CString(wmtrnet->GetRegistry(index));
+	case 4: return CString(wmtrnet->GetAllocated(index));
+	default: return CString(asn);
+	}
+}
+
+static const char* IpinfoLabel(int mode)
+{
+	switch(mode) {
+	case 0: return "ASN";
+	case 1: return "Prefix";
+	case 2: return "CC";
+	case 3: return "RIR";
+	case 4: return "Date";
+	default: return "ASN";
+	}
 }
 
 //*****************************************************************************
@@ -313,6 +476,18 @@ BOOL WinMTRDialog::InitRegistry()
 		RegSetValueEx(hKey_v,"ShowIps", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 	} else {
 		showIps = tmp_dword ? true : false;
+	}
+	if(RegQueryValueEx(hKey_v, "AsnEnabled", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
+		tmp_dword = asnEnabled ? 1 : 0;
+		RegSetValueEx(hKey_v,"AsnEnabled", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+	} else {
+		asnEnabled = tmp_dword ? true : false;
+	}
+	if(RegQueryValueEx(hKey_v, "IpinfoMode", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
+		tmp_dword = ipinfoMode;
+		RegSetValueEx(hKey_v,"IpinfoMode", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+	} else {
+		ipinfoMode = static_cast<int>(tmp_dword);
 	}
 	if(RegQueryValueEx(hKey_v, "UseIPv6", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
 		tmp_dword = useIPv6;
@@ -370,6 +545,16 @@ BOOL WinMTRDialog::InitRegistry()
 		RegSetValueEx(hKey_v,"ProbeMode", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 	} else {
 		probeMode = static_cast<int>(tmp_dword);
+	}
+	{
+		char orderBuf[128];
+		DWORD orderSize = sizeof(orderBuf);
+		if(RegQueryValueEx(hKey_v, "Order", 0, NULL, reinterpret_cast<unsigned char*>(orderBuf), &orderSize) != ERROR_SUCCESS) {
+			RegSetValueEx(hKey_v,"Order", 0, REG_SZ, reinterpret_cast<const unsigned char*>(orderString.c_str()), static_cast<DWORD>(orderString.size() + 1));
+		} else {
+			orderBuf[orderSize > 0 ? orderSize - 1 : 0] = '\0';
+			orderString = orderBuf;
+		}
 	}
 	if(RegQueryValueEx(hKey_v, "Port", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
 		tmp_dword = port;
@@ -653,19 +838,45 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 			return TRUE;
 		case 'U':
 			probeMode = (probeMode + 1) % 3;
-			if(probeMode == 1) {
-				statusBar.SetPaneText(0, "UDP mode is not supported in the MFC UI yet. Using ICMP.");
+			if(probeMode == 1 && useIPv6 == 1) {
+				statusBar.SetPaneText(0, "UDP mode supports IPv4 only. Using ICMP.");
 				probeMode = 0;
 			} else if(probeMode == 2 && useIPv6 == 1) {
-				statusBar.SetPaneText(0, "TCP mode supports IPv4 only in the MFC UI. Using ICMP.");
+				statusBar.SetPaneText(0, "TCP mode supports IPv4 only. Using ICMP.");
 				probeMode = 0;
 			} else {
-				statusBar.SetPaneText(0, probeMode == 2 ? "TCP mode selected." : "ICMP mode selected.");
+				statusBar.SetPaneText(0, probeMode == 2 ? "TCP mode selected." : (probeMode == 1 ? "UDP mode selected." : "ICMP mode selected."));
 			}
 			return TRUE;
 		case 'Y':
+			ipinfoMode = (ipinfoMode + 1) % 5;
+			statusBar.SetPaneText(0, IpinfoLabel(ipinfoMode));
+			ApplyColumnOrder();
+			DisplayRedraw();
+			{
+				HKEY hKey;
+				DWORD tmp_dword;
+				if(RegCreateKeyEx(HKEY_CURRENT_USER,"Software\\WinMTR\\Config",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey,NULL)==ERROR_SUCCESS) {
+					tmp_dword = static_cast<DWORD>(ipinfoMode);
+					RegSetValueEx(hKey,"IpinfoMode", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+					RegCloseKey(hKey);
+				}
+			}
+			return TRUE;
 		case 'Z':
-			statusBar.SetPaneText(0, "IP info/ASN toggles are not supported yet.");
+			asnEnabled = !asnEnabled;
+			statusBar.SetPaneText(0, asnEnabled ? "ASN enabled." : "ASN disabled.");
+			ApplyColumnOrder();
+			DisplayRedraw();
+			{
+				HKEY hKey;
+				DWORD tmp_dword;
+				if(RegCreateKeyEx(HKEY_CURRENT_USER,"Software\\WinMTR\\Config",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey,NULL)==ERROR_SUCCESS) {
+					tmp_dword = asnEnabled ? 1 : 0;
+					RegSetValueEx(hKey,"AsnEnabled", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+					RegCloseKey(hKey);
+				}
+			}
 			return TRUE;
 		case 'O':
 		case 'I':
@@ -756,7 +967,7 @@ void WinMTRDialog::OnRestart()
 //*****************************************************************************
 void WinMTRDialog::OnOptions()
 {
-	WinMTROptions optDlg(interval, pingsize, maxLRU, useDNS, maxHops, firstTtl, timeoutMs, tos, bitPattern, probeMode, port, localPort);
+	WinMTROptions optDlg(interval, pingsize, maxLRU, useDNS, maxHops, firstTtl, timeoutMs, tos, bitPattern, probeMode, port, localPort, orderString);
 	if(IDOK == optDlg.DoModal()) {
 	
 		pingsize = (WORD)optDlg.GetPingSize();
@@ -771,6 +982,7 @@ void WinMTRDialog::OnOptions()
 		probeMode = optDlg.GetMode();
 		port = optDlg.GetPort();
 		localPort = optDlg.GetLocalPort();
+		orderString = optDlg.GetOrder();
 		if(maxHops <= 0) maxHops = DEFAULT_MAX_HOPS;
 		if(firstTtl <= 0) firstTtl = DEFAULT_FIRST_TTL;
 		if(firstTtl > maxHops) firstTtl = maxHops;
@@ -806,8 +1018,10 @@ void WinMTRDialog::OnOptions()
 			RegSetValueEx(hKey,"Port", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
 			tmp_dword = static_cast<DWORD>(localPort);
 			RegSetValueEx(hKey,"LocalPort", 0, REG_DWORD, (const unsigned char*)&tmp_dword, sizeof(DWORD));
+			RegSetValueEx(hKey,"Order", 0, REG_SZ, reinterpret_cast<const unsigned char*>(orderString.c_str()), static_cast<DWORD>(orderString.size() + 1));
 			RegCloseKey(hKey);
 		}
+		ApplyColumnOrder();
 		if(maxLRU<nrLRU) {
 			if(RegCreateKeyEx(HKEY_CURRENT_USER,"Software\\WinMTR\\LRU",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey,NULL)==ERROR_SUCCESS) {
 				char key_name[20];
@@ -1218,32 +1432,16 @@ int WinMTRDialog::DisplayRedraw()
 			
 		m_listMTR.SetItem(rowIndex, 1, LVIF_TEXT, nr_crt, 0, 0, 0, 0);
 		
-		sprintf(buf, "%d", wmtrnet->GetPercent(i));
-		m_listMTR.SetItem(rowIndex, 2, LVIF_TEXT, buf, 0, 0, 0, 0);
-		
-		sprintf(buf, "%d", wmtrnet->GetXmit(i));
-		m_listMTR.SetItem(rowIndex, 3, LVIF_TEXT, buf, 0, 0, 0, 0);
-		
-		sprintf(buf, "%d", wmtrnet->GetReturned(i));
-		m_listMTR.SetItem(rowIndex, 4, LVIF_TEXT, buf, 0, 0, 0, 0);
-		
-		sprintf(buf, "%d", wmtrnet->GetLast(i));
-		m_listMTR.SetItem(rowIndex, 5, LVIF_TEXT, buf, 0, 0, 0, 0);
-
-		sprintf(buf, "%d", wmtrnet->GetAvg(i));
-		m_listMTR.SetItem(rowIndex, 6, LVIF_TEXT, buf, 0, 0, 0, 0);
-
-		sprintf(buf, "%d", wmtrnet->GetBest(i));
-		m_listMTR.SetItem(rowIndex, 7, LVIF_TEXT, buf, 0, 0, 0, 0);
-
-		sprintf(buf, "%d", wmtrnet->GetWorst(i));
-		m_listMTR.SetItem(rowIndex, 8, LVIF_TEXT, buf, 0, 0, 0, 0);
-
-		sprintf(buf, "%d", wmtrnet->GetStDev(i));
-		m_listMTR.SetItem(rowIndex, 9, LVIF_TEXT, buf, 0, 0, 0, 0);
-
-		sprintf(buf, "%d", wmtrnet->GetJitter(i));
-		m_listMTR.SetItem(rowIndex, 10, LVIF_TEXT, buf, 0, 0, 0, 0);
+		int colIndex = 2;
+		for(char code : orderFields) {
+			CString value = FormatFieldValue(code, i);
+			m_listMTR.SetItem(rowIndex, colIndex, LVIF_TEXT, value, 0, 0, 0, 0);
+			++colIndex;
+		}
+		if(asnEnabled) {
+			CString value = FormatIpInfo(i);
+			m_listMTR.SetItem(rowIndex, colIndex, LVIF_TEXT, value, 0, 0, 0, 0);
+		}
 		
 		
 	}
@@ -1329,10 +1527,14 @@ void PingThread(void* p)
 			AfxMessageBox("TCP mode supports IPv4 only in the MFC UI.");
 			wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
 		}
-	} else {
-		if(wmtrdlg->probeMode == 1) {
-			AfxMessageBox("UDP mode is not supported in the MFC UI yet.");
+	} else if(wmtrdlg->probeMode == 1) {
+		if(anfo->ai_family == AF_INET) {
+			wmtrdlg->wmtrnet->DoTraceUdp(reinterpret_cast<sockaddr_in*>(anfo->ai_addr));
+		} else {
+			AfxMessageBox("UDP mode supports IPv4 only in the MFC UI.");
+			wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
 		}
+	} else {
 		wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
 	}
 	freeaddrinfo(anfo);

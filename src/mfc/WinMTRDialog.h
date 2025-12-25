@@ -18,6 +18,8 @@
 #include "WinMTRStatusBar.h"
 #include "WinMTRNet.h"
 #include "afxlinkctrl.h"
+#include <string>
+#include <vector>
 
 //*****************************************************************************
 // CLASS:  WinMTRDialog
@@ -95,6 +97,10 @@ public:
 	int					probeMode;
 	int					port;
 	int					localPort;
+	std::string			orderString;
+	std::vector<char>	orderFields;
+	bool				asnEnabled;
+	int					ipinfoMode;
 	bool				showIps;
 	bool				paused;
 	int					nrLRU;
@@ -113,6 +119,10 @@ public:
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
+	void ApplyColumnOrder();
+	std::vector<char> ParseOrderFields(const std::string& order) const;
+	CString FormatFieldValue(char code, int index) const;
+	CString FormatIpInfo(int index) const;
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];
