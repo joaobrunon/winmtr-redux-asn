@@ -69,6 +69,7 @@ public:
 	CTabCtrl m_tabView;
 	CMFCLinkCtrl m_buttonAppnor;
 	CFont m_statusValueFont;
+	CFont m_statusSmallFont;
 	CBrush m_metricsCardBrush;
 	CBrush m_networkCardBrush;
 	COLORREF m_metricsCardColor;

@@ -791,6 +791,14 @@ void WinMTRDialog::ApplyStatusFonts()
 	m_statusValueFont.DeleteObject();
 	if(!m_statusValueFont.CreateFontIndirect(&lf)) return;
 
+	LOGFONT lfSmall = lf;
+	lfSmall.lfWeight = FW_NORMAL;
+	if(lfSmall.lfHeight < 0) {
+		lfSmall.lfHeight += 1;
+	}
+	m_statusSmallFont.DeleteObject();
+	m_statusSmallFont.CreateFontIndirect(&lfSmall);
+
 	const int valueControls[] = {
 		IDC_STATUS_RESP_VALUE,
 		IDC_STATUS_LAG_ROUTER_VALUE,
@@ -808,7 +816,12 @@ void WinMTRDialog::ApplyStatusFonts()
 
 	for(int id : valueControls) {
 		CWnd* ctrl = GetDlgItem(id);
-		if(ctrl) ctrl->SetFont(&m_statusValueFont);
+		if(!ctrl) continue;
+		if(id == IDC_STATUS_LAN_VALUE || id == IDC_STATUS_WAN_VALUE || id == IDC_STATUS_ASN_VALUE) {
+			ctrl->SetFont(&m_statusSmallFont);
+		} else {
+			ctrl->SetFont(&m_statusValueFont);
+		}
 	}
 }
 
@@ -1152,8 +1165,15 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		int height = rct.Height() - lb.top - 35;
 		int width = rct.Width() - 27;
 		int gap = 8;
-		int networkWidth = 230;
+		int minMetricsWidth = 180;
+		int networkWidth = width - minMetricsWidth - gap;
+		if(networkWidth < 220) networkWidth = 220;
+		if(networkWidth > 280) networkWidth = 280;
 		int metricsWidth = width - networkWidth - gap;
+		if(metricsWidth < minMetricsWidth) {
+			metricsWidth = minMetricsWidth;
+			networkWidth = width - metricsWidth - gap;
+		}
 		metricsCard->SetWindowPos(NULL, left, top, metricsWidth, height, SWP_NOZORDER);
 		networkCard->SetWindowPos(NULL, left + metricsWidth + gap, top, networkWidth, 70, SWP_NOZORDER);
 
@@ -1161,11 +1181,11 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		networkCard->GetWindowRect(&netRect);
 		ScreenToClient(&netRect);
 
-		const int labelLeft = netRect.left + 8;
-		const int valueLeft = netRect.left + 50;
+		const int labelLeft = netRect.left + 10;
+		const int valueLeft = netRect.left + 54;
 		const int valueWidth = netRect.right - valueLeft - 8;
-		const int lineHeight = 14;
-		const int firstLine = netRect.top + 12;
+		const int lineHeight = 16;
+		const int firstLine = netRect.top + 14;
 		struct Row {
 			int labelId;
 			int valueId;
