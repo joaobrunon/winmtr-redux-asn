@@ -68,6 +68,7 @@ public:
 	CListCtrl m_listMTR;
 	CTabCtrl m_tabView;
 	CMFCLinkCtrl m_buttonAppnor;
+	CFont m_statusValueFont;
 	
 	CStatic	m_staticS;
 	CStatic	m_staticJ;
@@ -140,6 +141,7 @@ protected:
 	void SetStatusText(const CString& text);
 	void UpdateStatusTab();
 	void ShowTab(int index);
+	void ApplyStatusFonts();
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];

@@ -403,6 +403,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	m_tabView.InsertItem(1, "Status");
 	m_tabView.SetCurSel(0);
 	ShowTab(0);
+	ApplyStatusFonts();
 
 	RefreshLocalIpInfo();
 	UpdateStatusTab();
@@ -643,6 +644,8 @@ void WinMTRDialog::ShowTab(int index)
 {
 	const int statusControls[] = {
 		IDC_STATUS_GROUP,
+		IDC_STATUS_CARD_METRICS,
+		IDC_STATUS_CARD_NETWORK,
 		IDC_STATUS_RESP_LABEL,
 		IDC_STATUS_LAG_ROUTER_LABEL,
 		IDC_STATUS_LAG_INET_LABEL,
@@ -767,6 +770,37 @@ void WinMTRDialog::UpdateStatusTab()
 	SetDlgItemText(IDC_STATUS_LAN_VALUE, lan);
 	SetDlgItemText(IDC_STATUS_WAN_VALUE, wan);
 	SetDlgItemText(IDC_STATUS_ASN_VALUE, asn);
+}
+
+void WinMTRDialog::ApplyStatusFonts()
+{
+	CFont* baseFont = GetFont();
+	if(!baseFont) return;
+	LOGFONT lf{};
+	baseFont->GetLogFont(&lf);
+	lf.lfWeight = FW_BOLD;
+	m_statusValueFont.DeleteObject();
+	if(!m_statusValueFont.CreateFontIndirect(&lf)) return;
+
+	const int valueControls[] = {
+		IDC_STATUS_RESP_VALUE,
+		IDC_STATUS_LAG_ROUTER_VALUE,
+		IDC_STATUS_LAG_INET_VALUE,
+		IDC_STATUS_AVG_VALUE,
+		IDC_STATUS_BEST_VALUE,
+		IDC_STATUS_WORST_VALUE,
+		IDC_STATUS_LATENCY_VALUE,
+		IDC_STATUS_JITTER_VALUE,
+		IDC_STATUS_LOSS_VALUE,
+		IDC_STATUS_LAN_VALUE,
+		IDC_STATUS_WAN_VALUE,
+		IDC_STATUS_ASN_VALUE
+	};
+
+	for(int id : valueControls) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) ctrl->SetFont(&m_statusValueFont);
+	}
 }
 
 void WinMTRDialog::RefreshLocalIpInfo()
@@ -1099,6 +1133,20 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	CWnd* statusGroup = GetDlgItem(IDC_STATUS_GROUP);
 	if(statusGroup) {
 		statusGroup->SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 17, rct.Height() - lb.top - 25, SWP_NOMOVE | SWP_NOZORDER);
+	}
+
+	CWnd* metricsCard = GetDlgItem(IDC_STATUS_CARD_METRICS);
+	CWnd* networkCard = GetDlgItem(IDC_STATUS_CARD_NETWORK);
+	if(metricsCard && networkCard) {
+		int left = lb.TopLeft().x + 5;
+		int top = lb.TopLeft().y + 9;
+		int height = rct.Height() - lb.top - 35;
+		int width = rct.Width() - 27;
+		int gap = 8;
+		int networkWidth = 190;
+		int metricsWidth = width - networkWidth - gap;
+		metricsCard->SetWindowPos(NULL, left, top, metricsWidth, height, SWP_NOZORDER);
+		networkCard->SetWindowPos(NULL, left + metricsWidth + gap, top, networkWidth, 70, SWP_NOZORDER);
 	}
 	
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST,

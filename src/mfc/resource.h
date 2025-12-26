@@ -70,6 +70,8 @@
 #define IDC_STATUS_LAN_VALUE            2024
 #define IDC_STATUS_WAN_VALUE            2025
 #define IDC_STATUS_ASN_VALUE            2026
+#define IDC_STATUS_CARD_METRICS         2027
+#define IDC_STATUS_CARD_NETWORK         2028
 #define IDC_STATUS_RESP_VALUE           2003
 #define IDC_STATUS_LAG_ROUTER_VALUE     2004
 #define IDC_STATUS_LAG_INET_VALUE       2005
