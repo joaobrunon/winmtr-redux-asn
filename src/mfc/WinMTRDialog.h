@@ -66,6 +66,7 @@ public:
 	CButton m_checkIPv6;
 	CButton m_checkShowIps;
 	CListCtrl m_listMTR;
+	CTabCtrl m_tabView;
 	CMFCLinkCtrl m_buttonAppnor;
 	
 	CStatic	m_staticS;
@@ -137,6 +138,8 @@ protected:
 	void UpdateIpInfoStatusBar();
 	afx_msg LRESULT OnUpdateIpInfo(WPARAM wParam, LPARAM lParam);
 	void SetStatusText(const CString& text);
+	void UpdateStatusTab();
+	void ShowTab(int index);
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];
@@ -159,6 +162,7 @@ protected:
 	afx_msg void OnEXPH();
 	afx_msg void OnEXPCSV();
 	afx_msg void OnEXPJSON();
+	afx_msg void OnTabSelchange(NMHDR* pNMHDR, LRESULT* pResult);
 	
 	afx_msg void OnDblclkList(NMHDR* pNMHDR, LRESULT* pResult);
 	

@@ -258,6 +258,7 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_BN_CLICKED(ID_EXPCSV, OnEXPCSV)
 	ON_BN_CLICKED(ID_EXPJSON, OnEXPJSON)
 	ON_NOTIFY(NM_DBLCLK, IDC_LIST_MTR, OnDblclkList)
+	ON_NOTIFY(TCN_SELCHANGE, IDC_TAB_VIEW, &WinMTRDialog::OnTabSelchange)
 	ON_CBN_SELCHANGE(IDC_COMBO_HOST, &WinMTRDialog::OnCbnSelchangeComboHost)
 	ON_CBN_SELENDOK(IDC_COMBO_HOST, &WinMTRDialog::OnCbnSelendokComboHost)
 	ON_CBN_CLOSEUP(IDC_COMBO_HOST, &WinMTRDialog::OnCbnCloseupComboHost)
@@ -338,6 +339,7 @@ void WinMTRDialog::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_CHECK_IPV6, m_checkIPv6);
 	DDX_Control(pDX, IDC_CHECK_SHOWIPS, m_checkShowIps);
 	DDX_Control(pDX, IDC_LIST_MTR, m_listMTR);
+	DDX_Control(pDX, IDC_TAB_VIEW, m_tabView);
 	DDX_Control(pDX, IDC_STATICS, m_staticS);
 	DDX_Control(pDX, IDC_STATICJ, m_staticJ);
 	DDX_Control(pDX, ID_EXPH, m_buttonExpH);
@@ -396,6 +398,11 @@ BOOL WinMTRDialog::OnInitDialog()
 	if(statusIndex >= 0) {
 		statusBar.SetPaneInfo(statusIndex, IDS_STRING_SB_NAME, SBPS_STRETCH, 0);
 	}
+
+	m_tabView.InsertItem(0, "MTR");
+	m_tabView.InsertItem(1, "Status");
+	m_tabView.SetCurSel(0);
+	ShowTab(0);
 
 	RefreshLocalIpInfo();
 	UpdateIpInfoStatusBar();
@@ -615,6 +622,101 @@ CString WinMTRDialog::FormatHostLabel(int index) const
 	}
 
 	return CString(buf);
+}
+
+void WinMTRDialog::ShowTab(int index)
+{
+	const int statusControls[] = {
+		IDC_STATUS_GROUP,
+		IDC_STATUS_RESP_LABEL,
+		IDC_STATUS_LAG_ROUTER_LABEL,
+		IDC_STATUS_LAG_INET_LABEL,
+		IDC_STATUS_AVG_LABEL,
+		IDC_STATUS_BEST_LABEL,
+		IDC_STATUS_WORST_LABEL,
+		IDC_STATUS_LATENCY_LABEL,
+		IDC_STATUS_JITTER_LABEL,
+		IDC_STATUS_LOSS_LABEL,
+		IDC_STATUS_RESP_VALUE,
+		IDC_STATUS_LAG_ROUTER_VALUE,
+		IDC_STATUS_LAG_INET_VALUE,
+		IDC_STATUS_AVG_VALUE,
+		IDC_STATUS_BEST_VALUE,
+		IDC_STATUS_WORST_VALUE,
+		IDC_STATUS_LATENCY_VALUE,
+		IDC_STATUS_JITTER_VALUE,
+		IDC_STATUS_LOSS_VALUE
+	};
+
+	bool showStatus = (index == 1);
+	m_listMTR.ShowWindow(showStatus ? SW_HIDE : SW_SHOW);
+	for(int id : statusControls) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) ctrl->ShowWindow(showStatus ? SW_SHOW : SW_HIDE);
+	}
+
+	if(showStatus) {
+		UpdateStatusTab();
+	}
+}
+
+void WinMTRDialog::UpdateStatusTab()
+{
+	if(m_tabView.GetCurSel() != 1) return;
+
+	int nh = wmtrnet->GetMax();
+	int lastHop = -1;
+	for(int i = nh - 1; i >= 0; --i) {
+		if(wmtrnet->GetReturned(i) > 0) {
+			lastHop = i;
+			break;
+		}
+	}
+
+	auto formatMs = [](int value, bool valid) -> CString {
+		if(!valid) return "N/A";
+		CString out;
+		out.Format("%d ms", value);
+		return out;
+	};
+
+	auto formatPct = [](int value) -> CString {
+		if(value < 0) return "N/A";
+		CString out;
+		out.Format("%d%%", value);
+		return out;
+	};
+
+	int routerHop = (nh > 0) ? 0 : -1;
+	bool routerValid = (routerHop >= 0 && wmtrnet->GetReturned(routerHop) > 0);
+	bool lastValid = (lastHop >= 0 && wmtrnet->GetReturned(lastHop) > 0);
+	CString lagRouter = formatMs(routerValid ? wmtrnet->GetAvg(routerHop) : 0, routerValid);
+	CString lagInternet = formatMs(lastValid ? wmtrnet->GetAvg(lastHop) : 0, lastValid);
+
+	CString avg = formatMs(lastValid ? wmtrnet->GetAvg(lastHop) : 0, lastValid);
+	CString best = formatMs(lastValid ? wmtrnet->GetBest(lastHop) : 0, lastValid);
+	CString worst = formatMs(lastValid ? wmtrnet->GetWorst(lastHop) : 0, lastValid);
+	CString latency = avg;
+	CString jitter = formatMs(lastValid ? wmtrnet->GetJitterAvg(lastHop) : 0, lastValid);
+	CString loss = lastValid ? formatPct(wmtrnet->GetPercent(lastHop)) : CString("N/A");
+	CString resp = "N/A";
+	if(lastValid) {
+		int lossPct = wmtrnet->GetPercent(lastHop);
+		if(lossPct >= 0) {
+			int responsiveness = 100 - lossPct;
+			resp = formatPct(responsiveness);
+		}
+	}
+
+	SetDlgItemText(IDC_STATUS_RESP_VALUE, resp);
+	SetDlgItemText(IDC_STATUS_LAG_ROUTER_VALUE, lagRouter);
+	SetDlgItemText(IDC_STATUS_LAG_INET_VALUE, lagInternet);
+	SetDlgItemText(IDC_STATUS_AVG_VALUE, avg);
+	SetDlgItemText(IDC_STATUS_BEST_VALUE, best);
+	SetDlgItemText(IDC_STATUS_WORST_VALUE, worst);
+	SetDlgItemText(IDC_STATUS_LATENCY_VALUE, latency);
+	SetDlgItemText(IDC_STATUS_JITTER_VALUE, jitter);
+	SetDlgItemText(IDC_STATUS_LOSS_VALUE, loss);
 }
 
 void WinMTRDialog::RefreshLocalIpInfo()
@@ -971,6 +1073,16 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	m_listMTR.GetWindowRect(&lb);
 	ScreenToClient(&lb);
 	m_listMTR.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 17, rct.Height() - lb.top - 25, SWP_NOMOVE | SWP_NOZORDER);
+
+	CRect tabRect;
+	m_tabView.GetWindowRect(&tabRect);
+	ScreenToClient(&tabRect);
+	m_tabView.SetWindowPos(NULL, tabRect.TopLeft().x, tabRect.TopLeft().y, rct.Width() - 17, tabRect.Height(), SWP_NOMOVE | SWP_NOZORDER);
+
+	CWnd* statusGroup = GetDlgItem(IDC_STATUS_GROUP);
+	if(statusGroup) {
+		statusGroup->SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 17, rct.Height() - lb.top - 25, SWP_NOMOVE | SWP_NOZORDER);
+	}
 	
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST,
 				   0, reposQuery, rct);
@@ -1743,6 +1855,12 @@ void WinMTRDialog::OnEXPJSON()
 	}
 }
 
+void WinMTRDialog::OnTabSelchange(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	ShowTab(m_tabView.GetCurSel());
+	*pResult = 0;
+}
+
 
 //*****************************************************************************
 // WinMTRDialog::WinMTRDialog
@@ -2126,6 +2244,8 @@ void WinMTRDialog::OnTimer(UINT_PTR nIDEvent)
 		if(state==TRACING) Transit(TRACING);
 		else if(state==STOPPING) Transit(STOPPING);
 	}
+
+	UpdateStatusTab();
 	
 	CDialog::OnTimer(nIDEvent);
 }

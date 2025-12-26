@@ -53,6 +53,26 @@
 #define IDC_EDIT_LOCALPORT              1037
 #define IDC_EDIT_ORDER                  1038
 #define ID_STATUS_IPINFO                2000
+#define IDC_TAB_VIEW                    2001
+#define IDC_STATUS_GROUP                2002
+#define IDC_STATUS_RESP_LABEL           2012
+#define IDC_STATUS_LAG_ROUTER_LABEL     2013
+#define IDC_STATUS_LAG_INET_LABEL       2014
+#define IDC_STATUS_AVG_LABEL            2015
+#define IDC_STATUS_BEST_LABEL           2016
+#define IDC_STATUS_WORST_LABEL          2017
+#define IDC_STATUS_LATENCY_LABEL        2018
+#define IDC_STATUS_JITTER_LABEL         2019
+#define IDC_STATUS_LOSS_LABEL           2020
+#define IDC_STATUS_RESP_VALUE           2003
+#define IDC_STATUS_LAG_ROUTER_VALUE     2004
+#define IDC_STATUS_LAG_INET_VALUE       2005
+#define IDC_STATUS_AVG_VALUE            2006
+#define IDC_STATUS_BEST_VALUE           2007
+#define IDC_STATUS_WORST_VALUE          2008
+#define IDC_STATUS_LATENCY_VALUE        2009
+#define IDC_STATUS_JITTER_VALUE         2010
+#define IDC_STATUS_LOSS_VALUE           2011
 
 // Next default values for new objects
 // 
