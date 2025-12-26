@@ -69,6 +69,12 @@ public:
 	CTabCtrl m_tabView;
 	CMFCLinkCtrl m_buttonAppnor;
 	CFont m_statusValueFont;
+	CBrush m_metricsCardBrush;
+	CBrush m_networkCardBrush;
+	COLORREF m_metricsCardColor;
+	COLORREF m_networkCardColor;
+	COLORREF m_statusTextColor;
+	COLORREF m_statusValueColor;
 	
 	CStatic	m_staticS;
 	CStatic	m_staticJ;
@@ -156,6 +162,7 @@ protected:
 	afx_msg void OnRestart();
 	afx_msg void OnOptions();
 	afx_msg void OnToggleShowIps();
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	virtual void OnCancel();
 	
 	afx_msg void OnCTTC();

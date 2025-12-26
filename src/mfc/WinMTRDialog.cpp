@@ -248,6 +248,7 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_WM_SIZE()
 	ON_WM_SIZING()
 	ON_WM_QUERYDRAGICON()
+	ON_WM_CTLCOLOR()
 	ON_BN_CLICKED(ID_RESTART, OnRestart)
 	ON_BN_CLICKED(ID_OPTIONS, OnOptions)
 	ON_BN_CLICKED(IDC_CHECK_SHOWIPS, OnToggleShowIps)
@@ -308,6 +309,10 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	nrLRU = 0;
 	strcpy(msz_defaulthostname, "8.8.8.8");
 	m_autostart = 1;
+	m_metricsCardColor = RGB(245, 247, 250);
+	m_networkCardColor = RGB(236, 241, 247);
+	m_statusTextColor = RGB(30, 30, 30);
+	m_statusValueColor = RGB(30, 90, 150);
 	
 	hasIntervalFromCmdLine = false;
 	hasPingsizeFromCmdLine = false;
@@ -403,6 +408,10 @@ BOOL WinMTRDialog::OnInitDialog()
 	m_tabView.InsertItem(1, "Status");
 	m_tabView.SetCurSel(0);
 	ShowTab(0);
+	m_metricsCardBrush.DeleteObject();
+	m_networkCardBrush.DeleteObject();
+	m_metricsCardBrush.CreateSolidBrush(m_metricsCardColor);
+	m_networkCardBrush.CreateSolidBrush(m_networkCardColor);
 	ApplyStatusFonts();
 
 	RefreshLocalIpInfo();
@@ -1919,6 +1928,91 @@ void WinMTRDialog::OnEXPJSON()
 			fclose(fp);
 		}
 	}
+}
+
+HBRUSH WinMTRDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
+{
+	HBRUSH hbr = CDialog::OnCtlColor(pDC, pWnd, nCtlColor);
+	if(!pWnd) return hbr;
+
+	int id = pWnd->GetDlgCtrlID();
+	bool isMetrics = false;
+	bool isNetwork = false;
+	bool isValue = false;
+
+	switch(id) {
+	case IDC_STATUS_CARD_METRICS:
+	case IDC_STATUS_RESP_LABEL:
+	case IDC_STATUS_LAG_ROUTER_LABEL:
+	case IDC_STATUS_LAG_INET_LABEL:
+	case IDC_STATUS_AVG_LABEL:
+	case IDC_STATUS_BEST_LABEL:
+	case IDC_STATUS_WORST_LABEL:
+	case IDC_STATUS_LATENCY_LABEL:
+	case IDC_STATUS_JITTER_LABEL:
+	case IDC_STATUS_LOSS_LABEL:
+	case IDC_STATUS_RESP_VALUE:
+	case IDC_STATUS_LAG_ROUTER_VALUE:
+	case IDC_STATUS_LAG_INET_VALUE:
+	case IDC_STATUS_AVG_VALUE:
+	case IDC_STATUS_BEST_VALUE:
+	case IDC_STATUS_WORST_VALUE:
+	case IDC_STATUS_LATENCY_VALUE:
+	case IDC_STATUS_JITTER_VALUE:
+	case IDC_STATUS_LOSS_VALUE:
+		isMetrics = true;
+		break;
+	case IDC_STATUS_CARD_NETWORK:
+	case IDC_STATUS_LAN_LABEL:
+	case IDC_STATUS_WAN_LABEL:
+	case IDC_STATUS_ASN_LABEL:
+	case IDC_STATUS_LAN_VALUE:
+	case IDC_STATUS_WAN_VALUE:
+	case IDC_STATUS_ASN_VALUE:
+		isNetwork = true;
+		break;
+	default:
+		break;
+	}
+	if(id == IDC_STATUS_RESP_VALUE ||
+		id == IDC_STATUS_LAG_ROUTER_VALUE ||
+		id == IDC_STATUS_LAG_INET_VALUE ||
+		id == IDC_STATUS_AVG_VALUE ||
+		id == IDC_STATUS_BEST_VALUE ||
+		id == IDC_STATUS_WORST_VALUE ||
+		id == IDC_STATUS_LATENCY_VALUE ||
+		id == IDC_STATUS_JITTER_VALUE ||
+		id == IDC_STATUS_LOSS_VALUE ||
+		id == IDC_STATUS_LAN_VALUE ||
+		id == IDC_STATUS_WAN_VALUE ||
+		id == IDC_STATUS_ASN_VALUE) {
+		isValue = true;
+	}
+
+	if(isMetrics || isNetwork) {
+		pDC->SetBkMode(OPAQUE);
+		if(isMetrics) {
+			pDC->SetBkColor(m_metricsCardColor);
+			if(id == IDC_STATUS_CARD_METRICS && nCtlColor == CTLCOLOR_BTN) {
+				return m_metricsCardBrush;
+			}
+			if(nCtlColor == CTLCOLOR_STATIC) {
+				pDC->SetTextColor(isValue ? m_statusValueColor : m_statusTextColor);
+				return m_metricsCardBrush;
+			}
+		} else if(isNetwork) {
+			pDC->SetBkColor(m_networkCardColor);
+			if(id == IDC_STATUS_CARD_NETWORK && nCtlColor == CTLCOLOR_BTN) {
+				return m_networkCardBrush;
+			}
+			if(nCtlColor == CTLCOLOR_STATIC) {
+				pDC->SetTextColor(isValue ? m_statusValueColor : m_statusTextColor);
+				return m_networkCardBrush;
+			}
+		}
+	}
+
+	return hbr;
 }
 
 void WinMTRDialog::OnTabSelchange(NMHDR* pNMHDR, LRESULT* pResult)
