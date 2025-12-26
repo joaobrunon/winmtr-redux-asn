@@ -694,12 +694,15 @@ void WinMTRDialog::ShowTab(int index)
 
 void WinMTRDialog::UpdateStatusTab()
 {
-	int nh = wmtrnet->GetMax();
+	bool hasTrace = (state == TRACING || state == STOPPING);
+	int nh = hasTrace ? wmtrnet->GetMax() : 0;
 	int lastHop = -1;
-	for(int i = nh - 1; i >= 0; --i) {
-		if(wmtrnet->GetReturned(i) > 0) {
-			lastHop = i;
-			break;
+	if(hasTrace) {
+		for(int i = nh - 1; i >= 0; --i) {
+			if(wmtrnet->GetReturned(i) > 0) {
+				lastHop = i;
+				break;
+			}
 		}
 	}
 
@@ -718,8 +721,8 @@ void WinMTRDialog::UpdateStatusTab()
 	};
 
 	int routerHop = (nh > 0) ? 0 : -1;
-	bool routerValid = (routerHop >= 0 && wmtrnet->GetReturned(routerHop) > 0);
-	bool lastValid = (lastHop >= 0 && wmtrnet->GetReturned(lastHop) > 0);
+	bool routerValid = (hasTrace && routerHop >= 0 && wmtrnet->GetReturned(routerHop) > 0);
+	bool lastValid = (hasTrace && lastHop >= 0 && wmtrnet->GetReturned(lastHop) > 0);
 	CString lagRouter = formatMs(routerValid ? wmtrnet->GetAvg(routerHop) : 0, routerValid);
 	CString lagInternet = formatMs(lastValid ? wmtrnet->GetAvg(lastHop) : 0, lastValid);
 
@@ -729,7 +732,7 @@ void WinMTRDialog::UpdateStatusTab()
 	CString latency = avg;
 	CString jitter = formatMs(lastValid ? wmtrnet->GetJitterAvg(lastHop) : 0, lastValid);
 	CString loss = lastValid ? formatPct(wmtrnet->GetPercent(lastHop)) : CString("N/A");
-	CString resp = "N/A";
+	CString resp = hasTrace ? "N/A" : "Start to measure";
 	if(lastValid) {
 		int lossPct = wmtrnet->GetPercent(lastHop);
 		if(lossPct >= 0) {
