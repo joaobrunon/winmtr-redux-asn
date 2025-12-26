@@ -147,7 +147,6 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	if(!lpfnIcmp6CreateFile || !lpfnIcmp6SendEcho2) {
 		hasIPv6=false;
 		AfxMessageBox("IPv6 support not found!");
-		return;//@todo : soft fail
 	}
 	
 	/*
@@ -162,7 +161,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 		hICMP6=(HANDLE)lpfnIcmp6CreateFile();
 		if(hICMP6==INVALID_HANDLE_VALUE) {
 			AfxMessageBox("Error in ICMPv6 module!");
-			return;//@todo : soft fail
+			hasIPv6=false;
 		}
 	}
 	
