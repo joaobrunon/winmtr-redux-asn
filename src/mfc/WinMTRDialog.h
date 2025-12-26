@@ -77,6 +77,7 @@ public:
 	COLORREF m_statusTextColor;
 	COLORREF m_statusValueColor;
 	bool statusAutoTrace;
+	bool initCompleted;
 	
 	CStatic	m_staticS;
 	CStatic	m_staticJ;
@@ -146,6 +147,7 @@ protected:
 	void StartWanInfoRefresh();
 	void UpdateIpInfoStatusBar();
 	afx_msg LRESULT OnUpdateIpInfo(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnStartStatusTrace(WPARAM wParam, LPARAM lParam);
 	void SetStatusText(const CString& text);
 	void UpdateStatusTab();
 	void ShowTab(int index);

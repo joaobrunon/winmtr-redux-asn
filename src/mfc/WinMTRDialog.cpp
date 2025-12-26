@@ -23,6 +23,7 @@
 #endif
 
 #define WM_APP_UPDATE_IPINFO (WM_APP + 1)
+#define WM_APP_START_STATUS_TRACE (WM_APP + 2)
 
 static const char* IpinfoLabel(int mode);
 static const char* OrderLabel(char code);
@@ -267,6 +268,7 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_WM_CLOSE()
 	ON_BN_CLICKED(IDCANCEL, &WinMTRDialog::OnBnClickedCancel)
 	ON_MESSAGE(WM_APP_UPDATE_IPINFO, &WinMTRDialog::OnUpdateIpInfo)
+	ON_MESSAGE(WM_APP_START_STATUS_TRACE, &WinMTRDialog::OnStartStatusTrace)
 END_MESSAGE_MAP()
 
 
@@ -313,6 +315,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	m_statusTextColor = RGB(30, 30, 30);
 	m_statusValueColor = RGB(30, 90, 150);
 	statusAutoTrace = false;
+	initCompleted = false;
 	
 	hasIntervalFromCmdLine = false;
 	hasPingsizeFromCmdLine = false;
@@ -366,6 +369,10 @@ BOOL WinMTRDialog::OnInitDialog()
 {
 	CDialog::OnInitDialog();
 	AppendStartupLog("WinMTRDialog OnInitDialog");
+	if(initCompleted) {
+		AppendStartupLog("WinMTRDialog OnInitDialog reentry");
+		return TRUE;
+	}
 	if(!wmtrnet->initialized) {
 		AppendStartupLog("WinMTRDialog wmtrnet not initialized");
 		EndDialog(-1);
@@ -463,15 +470,8 @@ BOOL WinMTRDialog::OnInitDialog()
 	GetClientRect(&rcNow);
 	OnSize(SIZE_RESTORED, rcNow.Width(), rcNow.Height());
 
-	CString autoHost;
-	m_comboHost.GetWindowText(autoHost);
-	autoHost.TrimLeft();
-	autoHost.TrimRight();
-	if(autoHost.IsEmpty()) {
-		m_comboHost.SetWindowText("1.1.1.1");
-		statusAutoTrace = true;
-		OnRestart();
-	}
+	initCompleted = true;
+	PostMessage(WM_APP_START_STATUS_TRACE, 0, 0);
 	
 	if(m_autostart) {
 		CString host;
@@ -920,6 +920,20 @@ void WinMTRDialog::StartWanInfoRefresh()
 LRESULT WinMTRDialog::OnUpdateIpInfo(WPARAM, LPARAM)
 {
 	UpdateStatusTab();
+	return 0;
+}
+
+LRESULT WinMTRDialog::OnStartStatusTrace(WPARAM, LPARAM)
+{
+	CString autoHost;
+	m_comboHost.GetWindowText(autoHost);
+	autoHost.TrimLeft();
+	autoHost.TrimRight();
+	if(autoHost.IsEmpty()) {
+		m_comboHost.SetWindowText("1.1.1.1");
+		statusAutoTrace = true;
+		OnRestart();
+	}
 	return 0;
 }
 
