@@ -64,6 +64,12 @@
 #define IDC_STATUS_LATENCY_LABEL        2018
 #define IDC_STATUS_JITTER_LABEL         2019
 #define IDC_STATUS_LOSS_LABEL           2020
+#define IDC_STATUS_LAN_LABEL            2021
+#define IDC_STATUS_WAN_LABEL            2022
+#define IDC_STATUS_ASN_LABEL            2023
+#define IDC_STATUS_LAN_VALUE            2024
+#define IDC_STATUS_WAN_VALUE            2025
+#define IDC_STATUS_ASN_VALUE            2026
 #define IDC_STATUS_RESP_VALUE           2003
 #define IDC_STATUS_LAG_ROUTER_VALUE     2004
 #define IDC_STATUS_LAG_INET_VALUE       2005

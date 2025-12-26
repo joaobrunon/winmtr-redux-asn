@@ -298,6 +298,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	ipinfoMode = 0;
 	showIps = false;
 	paused = false;
+	m_autostart = 1;
 	localIpv4 = "";
 	localIpv6 = "";
 	wanIpv4 = "";
@@ -381,9 +382,6 @@ BOOL WinMTRDialog::OnInitDialog()
 	UINT sbi[1];
 	sbi[0] = IDS_STRING_SB_NAME;
 	statusBar.SetIndicators(sbi,1);
-	if(statusBar.AddPane(ID_STATUS_IPINFO, 0)) {
-		statusBar.SetPaneWidth(statusBar.CommandToIndex(ID_STATUS_IPINFO), 450);
-	}
 	
 	// create Appnor button
 	if(m_buttonAppnor.Create(_T("www.appnor.com"), WS_CHILD|WS_VISIBLE|WS_TABSTOP, CRect(0,0,0,0), &statusBar, 1234)) {
@@ -405,7 +403,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	ShowTab(0);
 
 	RefreshLocalIpInfo();
-	UpdateIpInfoStatusBar();
+	UpdateStatusTab();
 	StartWanInfoRefresh();
 	
 	m_comboHost.SetFocus();
@@ -637,6 +635,9 @@ void WinMTRDialog::ShowTab(int index)
 		IDC_STATUS_LATENCY_LABEL,
 		IDC_STATUS_JITTER_LABEL,
 		IDC_STATUS_LOSS_LABEL,
+		IDC_STATUS_LAN_LABEL,
+		IDC_STATUS_WAN_LABEL,
+		IDC_STATUS_ASN_LABEL,
 		IDC_STATUS_RESP_VALUE,
 		IDC_STATUS_LAG_ROUTER_VALUE,
 		IDC_STATUS_LAG_INET_VALUE,
@@ -645,7 +646,10 @@ void WinMTRDialog::ShowTab(int index)
 		IDC_STATUS_WORST_VALUE,
 		IDC_STATUS_LATENCY_VALUE,
 		IDC_STATUS_JITTER_VALUE,
-		IDC_STATUS_LOSS_VALUE
+		IDC_STATUS_LOSS_VALUE,
+		IDC_STATUS_LAN_VALUE,
+		IDC_STATUS_WAN_VALUE,
+		IDC_STATUS_ASN_VALUE
 	};
 
 	bool showStatus = (index == 1);
@@ -708,6 +712,32 @@ void WinMTRDialog::UpdateStatusTab()
 		}
 	}
 
+	CString lan;
+	CString wan;
+	CString asn;
+	{
+		std::lock_guard<std::mutex> lock(ipInfoMutex);
+		if(!localIpv4.IsEmpty() || !localIpv6.IsEmpty()) {
+			lan = localIpv4;
+			if(!localIpv6.IsEmpty()) {
+				if(!lan.IsEmpty()) lan += " / ";
+				lan += localIpv6;
+			}
+		}
+		if(!wanIpv4.IsEmpty() || !wanIpv6.IsEmpty()) {
+			wan = wanIpv4;
+			if(!wanIpv6.IsEmpty()) {
+				if(!wan.IsEmpty()) wan += " / ";
+				wan += wanIpv6;
+			}
+		}
+		asn = wanAsn;
+	}
+
+	if(lan.IsEmpty()) lan = "N/A";
+	if(wan.IsEmpty()) wan = "N/A";
+	if(asn.IsEmpty()) asn = "N/A";
+
 	SetDlgItemText(IDC_STATUS_RESP_VALUE, resp);
 	SetDlgItemText(IDC_STATUS_LAG_ROUTER_VALUE, lagRouter);
 	SetDlgItemText(IDC_STATUS_LAG_INET_VALUE, lagInternet);
@@ -717,6 +747,9 @@ void WinMTRDialog::UpdateStatusTab()
 	SetDlgItemText(IDC_STATUS_LATENCY_VALUE, latency);
 	SetDlgItemText(IDC_STATUS_JITTER_VALUE, jitter);
 	SetDlgItemText(IDC_STATUS_LOSS_VALUE, loss);
+	SetDlgItemText(IDC_STATUS_LAN_VALUE, lan);
+	SetDlgItemText(IDC_STATUS_WAN_VALUE, wan);
+	SetDlgItemText(IDC_STATUS_ASN_VALUE, asn);
 }
 
 void WinMTRDialog::RefreshLocalIpInfo()
@@ -775,40 +808,7 @@ void WinMTRDialog::RefreshLocalIpInfo()
 
 void WinMTRDialog::UpdateIpInfoStatusBar()
 {
-	CString v4;
-	CString v6;
-	CString w4;
-	CString w6;
-	CString asn;
-	{
-		std::lock_guard<std::mutex> lock(ipInfoMutex);
-		v4 = localIpv4;
-		v6 = localIpv6;
-		w4 = wanIpv4;
-		w6 = wanIpv6;
-		asn = wanAsn;
-	}
-
-	CString info;
-	auto append = [&](const char* label, const CString& value) {
-		if(value.IsEmpty()) return;
-		if(!info.IsEmpty()) info += " | ";
-		info += label;
-		info += value;
-	};
-
-	append("LAN: ", v4);
-	append("LAN6: ", v6);
-	append("WAN: ", w4);
-	append("WAN6: ", w6);
-	append("ASN: ", asn);
-
-	if(info.IsEmpty()) info = "IP info unavailable";
-
-	int paneIndex = statusBar.CommandToIndex(ID_STATUS_IPINFO);
-	if(paneIndex >= 0) {
-		statusBar.SetPaneText(paneIndex, info);
-	}
+	UpdateStatusTab();
 }
 
 void WinMTRDialog::SetStatusText(const CString& text)
@@ -829,7 +829,7 @@ void WinMTRDialog::StartWanInfoRefresh()
 
 LRESULT WinMTRDialog::OnUpdateIpInfo(WPARAM, LPARAM)
 {
-	UpdateIpInfoStatusBar();
+	UpdateStatusTab();
 	return 0;
 }
 
