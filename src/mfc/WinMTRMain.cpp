@@ -61,18 +61,23 @@ WinMTRMain::WinMTRMain()
 //*****************************************************************************
 BOOL WinMTRMain::InitInstance()
 {
+	AppendStartupLog("InitInstance start");
 	INITCOMMONCONTROLSEX icex= {sizeof(INITCOMMONCONTROLSEX),ICC_STANDARD_CLASSES};
 	InitCommonControlsEx(&icex);
 	if(!AfxSocketInit()) {
 		AfxMessageBox(IDP_SOCKETS_INIT_FAILED);
+		AppendStartupLog("AfxSocketInit failed");
 		return FALSE;
 	}
+	AppendStartupLog("AfxSocketInit ok");
 	
 	AfxEnableControlContainer();
+	AppendStartupLog("AfxEnableControlContainer ok");
 	
 	
 	WinMTRDialog mtrDialog;
 	m_pMainWnd = &mtrDialog;
+	AppendStartupLog("WinMTRDialog constructed");
 	
 	if(strlen(m_lpCmdLine)) {
 		strcat(m_lpCmdLine," ");
@@ -80,6 +85,7 @@ BOOL WinMTRMain::InitInstance()
 	}
 	
 	mtrDialog.DoModal();
+	AppendStartupLog("WinMTRDialog DoModal returned");
 	
 	
 	return FALSE;

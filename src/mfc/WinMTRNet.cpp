@@ -98,6 +98,7 @@ static int ParseIcmpUdp(const unsigned char* buffer, int length, unsigned short 
 
 WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 {
+	AppendStartupLog("WinMTRNet ctor start");
 
 	ghMutex = CreateMutex(NULL, FALSE, NULL);
 	hasIPv6=true;
@@ -108,24 +109,28 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	
 	if(WSAStartup(MAKEWORD(2, 2), &wsaData)) {
 		AfxMessageBox("Failed initializing windows sockets library!");
+		AppendStartupLog("WinMTRNet WSAStartup failed");
 		return;
 	}
 	OSVERSIONINFOEX osvi= {0};
 	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFOEX);
 	if(!GetVersionEx((OSVERSIONINFO*) &osvi)) {
 		AfxMessageBox("Failed to get Windows version!");
+		AppendStartupLog("WinMTRNet GetVersionEx failed");
 		return;
 	}
 	if(osvi.dwMajorVersion==5 && osvi.dwMinorVersion==0) { //w2k
 		hICMP_DLL=LoadLibrary(_T("ICMP.DLL"));
 		if(!hICMP_DLL) {
 			AfxMessageBox("Failed: Unable to locate ICMP.DLL!");
+			AppendStartupLog("WinMTRNet LoadLibrary ICMP.DLL failed");
 			return;
 		}
 	} else {
 		hICMP_DLL=LoadLibrary(_T("Iphlpapi.dll"));
 		if(!hICMP_DLL) {
 			AfxMessageBox("Failed: Unable to locate Iphlpapi.dll!");
+			AppendStartupLog("WinMTRNet LoadLibrary Iphlpapi.dll failed");
 			return;
 		}
 	}
@@ -139,6 +144,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	lpfnIcmpSendEcho2   = (LPFNICMPSENDECHO2)GetProcAddress(hICMP_DLL,"IcmpSendEcho2");
 	if(!lpfnIcmpCreateFile || !lpfnIcmpCloseHandle || !lpfnIcmpSendEcho2) {
 		AfxMessageBox("Wrong ICMP system library !");
+		AppendStartupLog("WinMTRNet IcmpCreate/Close/Send missing");
 		return;
 	}
 	//IPv6
@@ -147,6 +153,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	if(!lpfnIcmp6CreateFile || !lpfnIcmp6SendEcho2) {
 		hasIPv6=false;
 		AfxMessageBox("IPv6 support not found!");
+		AppendStartupLog("WinMTRNet IPv6 ICMP not found");
 	}
 	
 	/*
@@ -155,6 +162,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	hICMP = (HANDLE) lpfnIcmpCreateFile();
 	if(hICMP == INVALID_HANDLE_VALUE) {
 		AfxMessageBox("Error in ICMP module!");
+		AppendStartupLog("WinMTRNet IcmpCreateFile failed");
 		return;
 	}
 	if(hasIPv6) {
@@ -162,12 +170,14 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 		if(hICMP6==INVALID_HANDLE_VALUE) {
 			AfxMessageBox("Error in ICMPv6 module!");
 			hasIPv6=false;
+			AppendStartupLog("WinMTRNet Icmp6CreateFile failed");
 		}
 	}
 	
 	ResetHops();
 	
 	initialized = true;
+	AppendStartupLog("WinMTRNet ctor ok");
 	return;
 }
 

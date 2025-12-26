@@ -117,5 +117,6 @@ const int MTR_COL_LENGTH[ MTR_NR_COLS ] = {
 };
 
 int gettimeofday(struct timeval* tv, struct timezone* tz);
+void AppendStartupLog(const char* msg);
 
 #endif // ifndef GLOBAL_H_

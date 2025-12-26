@@ -365,7 +365,9 @@ void WinMTRDialog::DoDataExchange(CDataExchange* pDX)
 BOOL WinMTRDialog::OnInitDialog()
 {
 	CDialog::OnInitDialog();
+	AppendStartupLog("WinMTRDialog OnInitDialog");
 	if(!wmtrnet->initialized) {
+		AppendStartupLog("WinMTRDialog wmtrnet not initialized");
 		EndDialog(-1);
 		return TRUE;
 	}
