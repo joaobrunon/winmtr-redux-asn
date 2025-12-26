@@ -316,6 +316,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	m_statusValueColor = RGB(30, 90, 150);
 	statusAutoTrace = false;
 	initCompleted = false;
+	initInProgress = false;
 	
 	hasIntervalFromCmdLine = false;
 	hasPingsizeFromCmdLine = false;
@@ -369,12 +370,14 @@ BOOL WinMTRDialog::OnInitDialog()
 {
 	CDialog::OnInitDialog();
 	AppendStartupLog("WinMTRDialog OnInitDialog");
-	if(initCompleted) {
+	if(initCompleted || initInProgress) {
 		AppendStartupLog("WinMTRDialog OnInitDialog reentry");
 		return TRUE;
 	}
+	initInProgress = true;
 	if(!wmtrnet->initialized) {
 		AppendStartupLog("WinMTRDialog wmtrnet not initialized");
+		initInProgress = false;
 		EndDialog(-1);
 		return TRUE;
 	}
@@ -471,6 +474,8 @@ BOOL WinMTRDialog::OnInitDialog()
 	OnSize(SIZE_RESTORED, rcNow.Width(), rcNow.Height());
 
 	initCompleted = true;
+	initInProgress = false;
+	AppendStartupLog("WinMTRDialog OnInitDialog done");
 	PostMessage(WM_APP_START_STATUS_TRACE, 0, 0);
 	
 	if(m_autostart) {

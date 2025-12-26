@@ -78,6 +78,7 @@ public:
 	COLORREF m_statusValueColor;
 	bool statusAutoTrace;
 	bool initCompleted;
+	bool initInProgress;
 	
 	CStatic	m_staticS;
 	CStatic	m_staticJ;
