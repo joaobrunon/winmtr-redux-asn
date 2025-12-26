@@ -379,19 +379,22 @@ BOOL WinMTRDialog::OnInitDialog()
 	UINT sbi[1];
 	sbi[0] = IDS_STRING_SB_NAME;
 	statusBar.SetIndicators(sbi,1);
-	statusBar.SetPaneInfo(0, statusBar.GetItemID(0),SBPS_STRETCH, NULL);
-
-	if(statusBar.AddPane(ID_STATUS_IPINFO, 1)) {
+	if(statusBar.AddPane(ID_STATUS_IPINFO, 0)) {
 		statusBar.SetPaneWidth(statusBar.CommandToIndex(ID_STATUS_IPINFO), 450);
 	}
 	
 	// create Appnor button
 	if(m_buttonAppnor.Create(_T("www.appnor.com"), WS_CHILD|WS_VISIBLE|WS_TABSTOP, CRect(0,0,0,0), &statusBar, 1234)) {
 		m_buttonAppnor.SetURL("http://appnor.com/?utm_source=winmtr&utm_medium=desktop&utm_campaign=software");
-		if(statusBar.AddPane(1234,2)) {
+		if(statusBar.AddPane(1234,1)) {
 			statusBar.SetPaneWidth(statusBar.CommandToIndex(1234),100);
 			statusBar.AddPaneControl(m_buttonAppnor,1234,true);
 		}
+	}
+
+	int statusIndex = statusBar.CommandToIndex(IDS_STRING_SB_NAME);
+	if(statusIndex >= 0) {
+		statusBar.SetPaneInfo(statusIndex, IDS_STRING_SB_NAME, SBPS_STRETCH, 0);
 	}
 
 	RefreshLocalIpInfo();
@@ -703,6 +706,14 @@ void WinMTRDialog::UpdateIpInfoStatusBar()
 	int paneIndex = statusBar.CommandToIndex(ID_STATUS_IPINFO);
 	if(paneIndex >= 0) {
 		statusBar.SetPaneText(paneIndex, info);
+	}
+}
+
+void WinMTRDialog::SetStatusText(const CString& text)
+{
+	int paneIndex = statusBar.CommandToIndex(IDS_STRING_SB_NAME);
+	if(paneIndex >= 0) {
+		statusBar.SetPaneText(paneIndex, text);
 	}
 }
 
@@ -1117,16 +1128,16 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 		switch(key) {
 		case 'P':
 			paused = !paused;
-			statusBar.SetPaneText(0, paused ? "Paused (press P to resume)." : "Resumed.");
+			SetStatusText(paused ? "Paused (press P to resume)." : "Resumed.");
 			return TRUE;
 		case 'R':
 			wmtrnet->ResetHops();
 			m_listMTR.DeleteAllItems();
-			statusBar.SetPaneText(0, "Counters reset.");
+			SetStatusText("Counters reset.");
 			return TRUE;
 		case 'N':
 			useDNS = !useDNS;
-			statusBar.SetPaneText(0, useDNS ? "DNS resolution enabled." : "DNS resolution disabled.");
+			SetStatusText(useDNS ? "DNS resolution enabled." : "DNS resolution disabled.");
 			{
 				HKEY hKey;
 				DWORD tmp_dword;
@@ -1148,18 +1159,18 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 		case 'U':
 			probeMode = (probeMode + 1) % 3;
 			if(probeMode == 1 && useIPv6 == 1) {
-				statusBar.SetPaneText(0, "UDP mode supports IPv4 only. Using ICMP.");
+				SetStatusText("UDP mode supports IPv4 only. Using ICMP.");
 				probeMode = 0;
 			} else if(probeMode == 2 && useIPv6 == 1) {
-				statusBar.SetPaneText(0, "TCP mode supports IPv4 only. Using ICMP.");
+				SetStatusText("TCP mode supports IPv4 only. Using ICMP.");
 				probeMode = 0;
 			} else {
-				statusBar.SetPaneText(0, probeMode == 2 ? "TCP mode selected." : (probeMode == 1 ? "UDP mode selected." : "ICMP mode selected."));
+				SetStatusText(probeMode == 2 ? "TCP mode selected." : (probeMode == 1 ? "UDP mode selected." : "ICMP mode selected."));
 			}
 			return TRUE;
 		case 'Y':
 			ipinfoMode = (ipinfoMode + 1) % 5;
-			statusBar.SetPaneText(0, IpinfoLabel(ipinfoMode));
+			SetStatusText(IpinfoLabel(ipinfoMode));
 			ApplyColumnOrder();
 			DisplayRedraw();
 			{
@@ -1174,7 +1185,7 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 			return TRUE;
 		case 'Z':
 			asnEnabled = !asnEnabled;
-			statusBar.SetPaneText(0, asnEnabled ? "ASN enabled." : "ASN disabled.");
+			SetStatusText(asnEnabled ? "ASN enabled." : "ASN disabled.");
 			ApplyColumnOrder();
 			DisplayRedraw();
 			{
@@ -1195,10 +1206,10 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 			OnOptions();
 			return TRUE;
 		case 'D':
-			statusBar.SetPaneText(0, "Display modes are not supported yet.");
+			SetStatusText("Display modes are not supported yet.");
 			return TRUE;
 		case 'J':
-			statusBar.SetPaneText(0, "Latency/jitter mode toggle is not supported yet.");
+			SetStatusText("Latency/jitter mode toggle is not supported yet.");
 			return TRUE;
 		default:
 			break;
@@ -1803,7 +1814,7 @@ int WinMTRDialog::InitMTRNet()
 	m_comboHost.GetWindowText(hostname, 255);
 	
 	sprintf(buf, "Resolving host %s...", hostname);
-	statusBar.SetPaneText(0,buf);
+	SetStatusText(buf);
 	
 	addrinfo nfofilter= {0};
 	addrinfo* anfo;
@@ -1820,7 +1831,7 @@ int WinMTRDialog::InitMTRNet()
 	nfofilter.ai_socktype=SOCK_RAW;
 	nfofilter.ai_flags=AI_NUMERICSERV|AI_ADDRCONFIG;//|AI_V4MAPPED;
 	if(getaddrinfo(hostname,NULL,&nfofilter,&anfo)||!anfo) {
-		statusBar.SetPaneText(0, CString((LPCSTR)IDS_STRING_SB_NAME));
+		SetStatusText(CString((LPCSTR)IDS_STRING_SB_NAME));
 		AfxMessageBox("Unable to resolve hostname.");
 		return 0;
 	}
@@ -2056,7 +2067,7 @@ void WinMTRDialog::Transit(STATES new_state)
 		m_comboHost.EnableWindow(FALSE);
 		m_checkIPv6.EnableWindow(FALSE);
 		m_buttonOptions.EnableWindow(FALSE);
-		statusBar.SetPaneText(0, "Double click on host name for more information.");
+		SetStatusText("Double click on host name for more information.");
 		_beginthread(PingThread, 0 , this);
 		m_buttonStart.EnableWindow(TRUE);
 		break;
@@ -2068,7 +2079,7 @@ void WinMTRDialog::Transit(STATES new_state)
 	case STOPPING_TO_IDLE:
 		DisplayRedraw();
 		m_buttonStart.EnableWindow(TRUE);
-		statusBar.SetPaneText(0, CString((LPCSTR)IDS_STRING_SB_NAME));
+		SetStatusText(CString((LPCSTR)IDS_STRING_SB_NAME));
 		m_buttonStart.SetWindowText("Start");
 		m_comboHost.EnableWindow(TRUE);
 		m_checkIPv6.EnableWindow(TRUE);
@@ -2086,13 +2097,13 @@ void WinMTRDialog::Transit(STATES new_state)
 	case TRACING_TO_STOPPING:
 		m_buttonStart.EnableWindow(FALSE);
 		wmtrnet->StopTrace();
-		statusBar.SetPaneText(0, "Waiting for last packets in order to stop trace ...");
+		SetStatusText("Waiting for last packets in order to stop trace ...");
 		DisplayRedraw();
 		break;
 	case TRACING_TO_EXIT:
 		m_buttonStart.EnableWindow(FALSE);
 		wmtrnet->StopTrace();
-		statusBar.SetPaneText(0, "Waiting for last packets in order to stop trace ...");
+		SetStatusText("Waiting for last packets in order to stop trace ...");
 		break;
 	default:
 		TRACE_MSG("Unknown transition " << transition);

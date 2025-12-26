@@ -136,6 +136,7 @@ protected:
 	void StartWanInfoRefresh();
 	void UpdateIpInfoStatusBar();
 	afx_msg LRESULT OnUpdateIpInfo(WPARAM wParam, LPARAM lParam);
+	void SetStatusText(const CString& text);
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];
