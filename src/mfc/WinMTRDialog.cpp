@@ -306,6 +306,8 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	wanAsn = "";
 	wanInfoThread = NULL;
 	nrLRU = 0;
+	strcpy(msz_defaulthostname, "8.8.8.8");
+	m_autostart = 1;
 	
 	hasIntervalFromCmdLine = false;
 	hasPingsizeFromCmdLine = false;
@@ -446,8 +448,23 @@ BOOL WinMTRDialog::OnInitDialog()
 	ApplyColumnOrder();
 	
 	if(m_autostart) {
-		m_comboHost.SetWindowText(msz_defaulthostname);
-		OnRestart();
+		CString host;
+		m_comboHost.GetWindowText(host);
+		if(host.IsEmpty()) {
+			if(msz_defaulthostname[0] != '\0') {
+				m_comboHost.SetWindowText(msz_defaulthostname);
+			} else if(m_comboHost.GetCount() > 0) {
+				CString first;
+				m_comboHost.GetLBText(0, first);
+				if(first.CompareNoCase(CString((LPCSTR)IDS_STRING_CLEAR_HISTORY)) != 0) {
+					m_comboHost.SetWindowText(first);
+				}
+			}
+		}
+		m_comboHost.GetWindowText(host);
+		if(!host.IsEmpty()) {
+			OnRestart();
+		}
 	}
 	
 	return FALSE;
@@ -1179,7 +1196,8 @@ void WinMTRDialog::OnDblclkList(NMHDR* /*pNMHDR*/, LRESULT* pResult)
 void WinMTRDialog::SetHostName(const char* host)
 {
 	m_autostart = 1;
-	strncpy(msz_defaulthostname,host,1000);
+	strncpy(msz_defaulthostname, host, sizeof(msz_defaulthostname) - 1);
+	msz_defaulthostname[sizeof(msz_defaulthostname) - 1] = '\0';
 }
 
 
