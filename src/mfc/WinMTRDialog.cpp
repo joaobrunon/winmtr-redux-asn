@@ -418,16 +418,6 @@ BOOL WinMTRDialog::OnInitDialog()
 	UpdateStatusTab();
 	StartWanInfoRefresh();
 
-	CString autoHost;
-	m_comboHost.GetWindowText(autoHost);
-	autoHost.TrimLeft();
-	autoHost.TrimRight();
-	if(autoHost.IsEmpty()) {
-		m_comboHost.SetWindowText("1.1.1.1");
-		statusAutoTrace = true;
-		OnRestart();
-	}
-
 	m_comboHost.SetFocus();
 	
 	// We need to resize the dialog to make room for control bars.
@@ -466,6 +456,20 @@ BOOL WinMTRDialog::OnInitDialog()
 	
 	InitRegistry();
 	ApplyColumnOrder();
+
+	CRect rcNow;
+	GetClientRect(&rcNow);
+	OnSize(SIZE_RESTORED, rcNow.Width(), rcNow.Height());
+
+	CString autoHost;
+	m_comboHost.GetWindowText(autoHost);
+	autoHost.TrimLeft();
+	autoHost.TrimRight();
+	if(autoHost.IsEmpty()) {
+		m_comboHost.SetWindowText("1.1.1.1");
+		statusAutoTrace = true;
+		OnRestart();
+	}
 	
 	if(m_autostart) {
 		CString host;
@@ -1519,7 +1523,8 @@ void WinMTRDialog::OnRestart()
 	statusAutoTrace = false;
 
 	// If clear history is selected, just clear the registry and listbox and return
-	if(m_comboHost.GetCurSel() == m_comboHost.GetCount() - 1) {
+	if(m_comboHost.GetCount() > 0 && m_comboHost.GetCurSel() >= 0 &&
+		m_comboHost.GetCurSel() == m_comboHost.GetCount() - 1) {
 		ClearHistory();
 		return;
 	}
