@@ -1207,6 +1207,45 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 				value->SetWindowPos(NULL, valueLeft, topRow, valueWidth, 10, SWP_NOZORDER);
 			}
 		}
+
+		CRect metricsRect;
+		metricsCard->GetWindowRect(&metricsRect);
+		ScreenToClient(&metricsRect);
+
+		const int metricsLabelLeft = metricsRect.left + 10;
+		const int metricsValueLeft = metricsRect.left + 125;
+		int metricsValueWidth = metricsRect.right - metricsValueLeft - 10;
+		if(metricsValueWidth < 60) metricsValueWidth = 60;
+		const int metricsLineHeight = 14;
+		const int metricsFirstLine = metricsRect.top + 16;
+		const int metricsLabelWidth = metricsValueLeft - metricsLabelLeft - 6;
+		struct MetricsRow {
+			int labelId;
+			int valueId;
+			int offset;
+		};
+		const MetricsRow metricsRows[] = {
+			{IDC_STATUS_RESP_LABEL, IDC_STATUS_RESP_VALUE, 0},
+			{IDC_STATUS_LAG_ROUTER_LABEL, IDC_STATUS_LAG_ROUTER_VALUE, 1},
+			{IDC_STATUS_LAG_INET_LABEL, IDC_STATUS_LAG_INET_VALUE, 2},
+			{IDC_STATUS_AVG_LABEL, IDC_STATUS_AVG_VALUE, 3},
+			{IDC_STATUS_BEST_LABEL, IDC_STATUS_BEST_VALUE, 4},
+			{IDC_STATUS_WORST_LABEL, IDC_STATUS_WORST_VALUE, 5},
+			{IDC_STATUS_LATENCY_LABEL, IDC_STATUS_LATENCY_VALUE, 6},
+			{IDC_STATUS_JITTER_LABEL, IDC_STATUS_JITTER_VALUE, 7},
+			{IDC_STATUS_LOSS_LABEL, IDC_STATUS_LOSS_VALUE, 8}
+		};
+		for(const auto& row : metricsRows) {
+			int topRow = metricsFirstLine + row.offset * metricsLineHeight;
+			CWnd* label = GetDlgItem(row.labelId);
+			CWnd* value = GetDlgItem(row.valueId);
+			if(label) {
+				label->SetWindowPos(NULL, metricsLabelLeft, topRow, metricsLabelWidth, 10, SWP_NOZORDER);
+			}
+			if(value) {
+				value->SetWindowPos(NULL, metricsValueLeft, topRow, metricsValueWidth, 10, SWP_NOZORDER);
+			}
+		}
 	}
 	
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST,
