@@ -312,6 +312,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	m_networkCardColor = RGB(236, 241, 247);
 	m_statusTextColor = RGB(30, 30, 30);
 	m_statusValueColor = RGB(30, 90, 150);
+	statusAutoTrace = false;
 	
 	hasIntervalFromCmdLine = false;
 	hasPingsizeFromCmdLine = false;
@@ -416,7 +417,17 @@ BOOL WinMTRDialog::OnInitDialog()
 	RefreshLocalIpInfo();
 	UpdateStatusTab();
 	StartWanInfoRefresh();
-	
+
+	CString autoHost;
+	m_comboHost.GetWindowText(autoHost);
+	autoHost.TrimLeft();
+	autoHost.TrimRight();
+	if(autoHost.IsEmpty()) {
+		m_comboHost.SetWindowText("1.1.1.1");
+		statusAutoTrace = true;
+		OnRestart();
+	}
+
 	m_comboHost.SetFocus();
 	
 	// We need to resize the dialog to make room for control bars.
@@ -1504,6 +1515,9 @@ BOOL WinMTRDialog::PreTranslateMessage(MSG* pMsg)
 //*****************************************************************************
 void WinMTRDialog::OnRestart()
 {
+	bool isAutoStatus = statusAutoTrace;
+	statusAutoTrace = false;
+
 	// If clear history is selected, just clear the registry and listbox and return
 	if(m_comboHost.GetCurSel() == m_comboHost.GetCount() - 1) {
 		ClearHistory();
@@ -1537,7 +1551,7 @@ void WinMTRDialog::OnRestart()
 			RegCloseKey(hKey);
 		}
 		if(InitMTRNet()) {
-			if(m_comboHost.FindString(-1, sHost) == CB_ERR) {
+			if(!isAutoStatus && m_comboHost.FindString(-1, sHost) == CB_ERR) {
 				m_comboHost.InsertString(m_comboHost.GetCount() - 1,sHost);
 				if(RegCreateKeyEx(HKEY_CURRENT_USER,"Software\\WinMTR\\LRU",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey,NULL)==ERROR_SUCCESS) {
 					char key_name[20];

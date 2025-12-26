@@ -76,6 +76,7 @@ public:
 	COLORREF m_networkCardColor;
 	COLORREF m_statusTextColor;
 	COLORREF m_statusValueColor;
+	bool statusAutoTrace;
 	
 	CStatic	m_staticS;
 	CStatic	m_staticJ;
