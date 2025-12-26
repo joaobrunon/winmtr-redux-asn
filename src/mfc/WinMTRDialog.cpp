@@ -299,7 +299,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	ipinfoMode = 0;
 	showIps = false;
 	paused = false;
-	m_autostart = 1;
+	m_autostart = 0;
 	localIpv4 = "";
 	localIpv6 = "";
 	wanIpv4 = "";
@@ -307,8 +307,7 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	wanAsn = "";
 	wanInfoThread = NULL;
 	nrLRU = 0;
-	strcpy(msz_defaulthostname, "8.8.8.8");
-	m_autostart = 1;
+	msz_defaulthostname[0] = '\0';
 	m_metricsCardColor = RGB(245, 247, 250);
 	m_networkCardColor = RGB(236, 241, 247);
 	m_statusTextColor = RGB(30, 30, 30);
@@ -695,8 +694,6 @@ void WinMTRDialog::ShowTab(int index)
 
 void WinMTRDialog::UpdateStatusTab()
 {
-	if(m_tabView.GetCurSel() != 1) return;
-
 	int nh = wmtrnet->GetMax();
 	int lastHop = -1;
 	for(int i = nh - 1; i >= 0; --i) {
@@ -1152,10 +1149,41 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		int height = rct.Height() - lb.top - 35;
 		int width = rct.Width() - 27;
 		int gap = 8;
-		int networkWidth = 190;
+		int networkWidth = 230;
 		int metricsWidth = width - networkWidth - gap;
 		metricsCard->SetWindowPos(NULL, left, top, metricsWidth, height, SWP_NOZORDER);
 		networkCard->SetWindowPos(NULL, left + metricsWidth + gap, top, networkWidth, 70, SWP_NOZORDER);
+
+		CRect netRect;
+		networkCard->GetWindowRect(&netRect);
+		ScreenToClient(&netRect);
+
+		const int labelLeft = netRect.left + 8;
+		const int valueLeft = netRect.left + 50;
+		const int valueWidth = netRect.right - valueLeft - 8;
+		const int lineHeight = 14;
+		const int firstLine = netRect.top + 12;
+		struct Row {
+			int labelId;
+			int valueId;
+			int offset;
+		};
+		const Row rows[] = {
+			{IDC_STATUS_LAN_LABEL, IDC_STATUS_LAN_VALUE, 0},
+			{IDC_STATUS_WAN_LABEL, IDC_STATUS_WAN_VALUE, 1},
+			{IDC_STATUS_ASN_LABEL, IDC_STATUS_ASN_VALUE, 2}
+		};
+		for(const auto& row : rows) {
+			int topRow = firstLine + row.offset * lineHeight;
+			CWnd* label = GetDlgItem(row.labelId);
+			CWnd* value = GetDlgItem(row.valueId);
+			if(label) {
+				label->SetWindowPos(NULL, labelLeft, topRow, 40, 10, SWP_NOZORDER);
+			}
+			if(value) {
+				value->SetWindowPos(NULL, valueLeft, topRow, valueWidth, 10, SWP_NOZORDER);
+			}
+		}
 	}
 	
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST,
