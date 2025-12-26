@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <climits>
 #include <mutex>
 #include <iphlpapi.h>
 #include <winhttp.h>
@@ -310,6 +311,10 @@ WinMTRDialog::WinMTRDialog(CWnd* pParent)
 	wanInfoThread = NULL;
 	nrLRU = 0;
 	msz_defaulthostname[0] = '\0';
+	layoutBaseCaptured = false;
+	baseExportTop = 0;
+	baseExportLeft = 0;
+	baseExportHeight = 0;
 	m_metricsCardColor = RGB(245, 247, 250);
 	m_networkCardColor = RGB(236, 241, 247);
 	m_statusTextColor = RGB(30, 30, 30);
@@ -465,6 +470,38 @@ BOOL WinMTRDialog::OnInitDialog()
 	
 	// And position the control bars
 	RepositionBars(AFX_IDW_CONTROLBAR_FIRST, AFX_IDW_CONTROLBAR_LAST, 0);
+
+	if(!layoutBaseCaptured) {
+		m_staticJ.GetWindowRect(&baseStaticJRect);
+		ScreenToClient(&baseStaticJRect);
+		m_tabView.GetWindowRect(&baseTabRect);
+		ScreenToClient(&baseTabRect);
+		m_listMTR.GetWindowRect(&baseListRect);
+		ScreenToClient(&baseListRect);
+		CWnd* statusGroup = GetDlgItem(IDC_STATUS_GROUP);
+		if(statusGroup) {
+			statusGroup->GetWindowRect(&baseStatusGroupRect);
+			ScreenToClient(&baseStatusGroupRect);
+		}
+		CRect expRect;
+		baseExportLeft = INT_MAX;
+		CButton* exportButtons[] = {
+			&m_buttonExpH,
+			&m_buttonExpT,
+			&m_buttonExpJson,
+			&m_buttonExpCsv
+		};
+		for(auto* btn : exportButtons) {
+			btn->GetWindowRect(&expRect);
+			ScreenToClient(&expRect);
+			if(expRect.left < baseExportLeft) baseExportLeft = expRect.left;
+		}
+		m_buttonExpH.GetWindowRect(&expRect);
+		ScreenToClient(&expRect);
+		baseExportTop = expRect.top;
+		baseExportHeight = expRect.Height();
+		layoutBaseCaptured = true;
+	}
 	
 	InitRegistry();
 	ApplyColumnOrder();
@@ -567,6 +604,30 @@ void WinMTRDialog::ApplyColumnOrder()
 	if(asnEnabled) {
 		addColumn(IpinfoLabel(ipinfoMode), 120);
 	}
+	AdjustListColumns();
+}
+
+void WinMTRDialog::AdjustListColumns()
+{
+	if(!IsWindow(m_listMTR.m_hWnd)) return;
+	CHeaderCtrl* header = m_listMTR.GetHeaderCtrl();
+	if(!header) return;
+	int columnCount = header->GetItemCount();
+	if(columnCount <= 0) return;
+
+	CRect listRect;
+	m_listMTR.GetClientRect(&listRect);
+	int listWidth = listRect.Width();
+	if(listWidth <= 0) return;
+
+	int otherWidth = 0;
+	for(int i = 1; i < columnCount; ++i) {
+		otherWidth += m_listMTR.GetColumnWidth(i);
+	}
+	int targetHost = listWidth - otherWidth - GetSystemMetrics(SM_CXVSCROLL);
+	const int minHostWidth = 100;
+	if(targetHost < minHostWidth) targetHost = minHostWidth;
+	m_listMTR.SetColumnWidth(0, targetHost);
 }
 
 CString WinMTRDialog::FormatFieldValue(char code, int index) const
@@ -1123,10 +1184,10 @@ void WinMTRDialog::OnSizing(UINT fwSide, LPRECT pRect)
 	int iWidth = (pRect->right)-(pRect->left);
 	int iHeight = (pRect->bottom)-(pRect->top);
 	
-	if(iWidth<638)
-		pRect->right = pRect->left+638;
-	if(iHeight<388)
-		pRect->bottom = pRect->top+388;
+	if(iWidth < 520)
+		pRect->right = pRect->left + 520;
+	if(iHeight < 360)
+		pRect->bottom = pRect->top + 360;
 }
 
 
@@ -1144,25 +1205,48 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	GetClientRect(&rct);
 	m_staticS.GetWindowRect(&lb);
 	ScreenToClient(&lb);
-	m_staticS.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width()-lb.TopLeft().x-8, lb.Height() , SWP_NOMOVE | SWP_NOZORDER);
+	const int topGroupRightPad = 12;
+	m_staticS.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - lb.TopLeft().x - topGroupRightPad, lb.Height(), SWP_NOMOVE | SWP_NOZORDER);
 	
 	m_staticJ.GetWindowRect(&lb);
 	ScreenToClient(&lb);
-	m_staticJ.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 16, lb.Height(), SWP_NOMOVE | SWP_NOZORDER);
+	int staticJHeight = lb.Height();
+	if(layoutBaseCaptured) staticJHeight = baseStaticJRect.Height();
+	m_staticJ.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - lb.TopLeft().x - topGroupRightPad, staticJHeight, SWP_NOMOVE | SWP_NOZORDER);
 	
 	const int rightMargin = 16;
 	const int spacing = 4;
+	int exportExtraTop = 0;
 	int currentRight = rct.Width() - rightMargin;
 
 	CButton* topRightButtons[] = {
 		&m_buttonExit,
-		&m_buttonOptions
+		&m_buttonOptions,
+		&m_buttonStart
 	};
+	bool hasStartRect = false;
+	CRect startRect;
 	for(auto* btn : topRightButtons) {
 		btn->GetWindowRect(&lb);
 		ScreenToClient(&lb);
 		btn->SetWindowPos(NULL, currentRight - lb.Width(), lb.TopLeft().y, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		if(btn == &m_buttonStart) {
+			startRect = lb;
+			startRect.OffsetRect(currentRight - lb.Width() - lb.left, 0);
+			hasStartRect = true;
+		}
 		currentRight -= (lb.Width() + spacing);
+	}
+
+	if(hasStartRect) {
+		CRect comboRect;
+		m_comboHost.GetWindowRect(&comboRect);
+		ScreenToClient(&comboRect);
+		int comboRight = startRect.left - spacing;
+		int comboWidth = comboRight - comboRect.left;
+		const int minComboWidth = 90;
+		if(comboWidth < minComboWidth) comboWidth = minComboWidth;
+		m_comboHost.SetWindowPos(NULL, comboRect.left, comboRect.top, comboWidth, comboRect.Height(), SWP_NOZORDER);
 	}
 
 	currentRight = rct.Width() - rightMargin;
@@ -1172,33 +1256,99 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		&m_buttonExpJson,
 		&m_buttonExpCsv
 	};
+	int exportLeftLimit = baseExportLeft;
+	if(exportLeftLimit <= 0 || exportLeftLimit == INT_MAX) {
+		exportButtons[0]->GetWindowRect(&lb);
+		ScreenToClient(&lb);
+		exportLeftLimit = lb.left;
+	}
+	exportButtons[0]->GetWindowRect(&lb);
+	ScreenToClient(&lb);
+	const int exportTopPad = 2;
+	int exportRowHeight = baseExportHeight > 0 ? baseExportHeight : lb.Height();
+	int exportRowTop = (baseExportTop > 0 ? baseExportTop : lb.top) + exportTopPad;
+	int exportTotalWidth = 0;
 	for(auto* btn : exportButtons) {
 		btn->GetWindowRect(&lb);
 		ScreenToClient(&lb);
-		btn->SetWindowPos(NULL, currentRight - lb.Width(), lb.TopLeft().y, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		exportTotalWidth += lb.Width();
+	}
+	exportTotalWidth += spacing * (static_cast<int>(sizeof(exportButtons) / sizeof(exportButtons[0])) - 1);
+	int exportAvailable = rct.Width() - rightMargin - exportLeftLimit;
+	bool wrapExport = exportTotalWidth > exportAvailable;
+	exportExtraTop = wrapExport ? (exportRowHeight + 4) : 0;
+	if(layoutBaseCaptured) {
+		const int groupBasePad = 6;
+		int newHeight = baseStaticJRect.Height() + exportExtraTop + groupBasePad;
+		m_staticJ.SetWindowPos(NULL, baseStaticJRect.left, baseStaticJRect.top, rct.Width() - baseStaticJRect.left - topGroupRightPad, newHeight, SWP_NOZORDER);
+	}
+
+	int row = 0;
+	currentRight = rct.Width() - rightMargin;
+	for(auto* btn : exportButtons) {
+		btn->GetWindowRect(&lb);
+		ScreenToClient(&lb);
+		if(row == 0 && (currentRight - lb.Width() < exportLeftLimit) && wrapExport) {
+			row = 1;
+			currentRight = rct.Width() - rightMargin;
+		}
+		int rowTop = exportRowTop + (row * (exportRowHeight + 4));
+		btn->SetWindowPos(NULL, currentRight - lb.Width(), rowTop, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
 		currentRight -= (lb.Width() + spacing);
+	}
+
+	CRect rightGroup;
+	m_staticS.GetWindowRect(&rightGroup);
+	ScreenToClient(&rightGroup);
+	int checkRight = rightGroup.right - 8;
+	int checkLeft = rightGroup.left + 6;
+	CRect showIpsRect;
+	m_checkShowIps.GetWindowRect(&showIpsRect);
+	ScreenToClient(&showIpsRect);
+	CRect ipv6Rect;
+	m_checkIPv6.GetWindowRect(&ipv6Rect);
+	ScreenToClient(&ipv6Rect);
+	int combinedWidth = ipv6Rect.Width() + spacing + showIpsRect.Width();
+	if(combinedWidth > (checkRight - checkLeft)) {
+		m_checkIPv6.SetWindowPos(NULL, checkLeft, ipv6Rect.top, ipv6Rect.Width(), ipv6Rect.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		m_checkShowIps.SetWindowPos(NULL, checkLeft, ipv6Rect.top + ipv6Rect.Height() + 4, showIpsRect.Width(), showIpsRect.Height(), SWP_NOSIZE | SWP_NOZORDER);
+	} else {
+		int showIpsLeft = checkRight - showIpsRect.Width();
+		m_checkShowIps.SetWindowPos(NULL, showIpsLeft, showIpsRect.top, showIpsRect.Width(), showIpsRect.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		int ipv6Left = showIpsLeft - spacing - ipv6Rect.Width();
+		if(ipv6Left < checkLeft) ipv6Left = checkLeft;
+		m_checkIPv6.SetWindowPos(NULL, ipv6Left, ipv6Rect.top, ipv6Rect.Width(), ipv6Rect.Height(), SWP_NOSIZE | SWP_NOZORDER);
 	}
 	
 	m_listMTR.GetWindowRect(&lb);
 	ScreenToClient(&lb);
-	m_listMTR.SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 17, rct.Height() - lb.top - 25, SWP_NOMOVE | SWP_NOZORDER);
+	int listLeft = layoutBaseCaptured ? baseListRect.left : lb.TopLeft().x;
+	int listTop = layoutBaseCaptured ? (baseListRect.top + exportExtraTop) : lb.TopLeft().y;
+	m_listMTR.SetWindowPos(NULL, listLeft, listTop, rct.Width() - 17, rct.Height() - listTop - 25, SWP_NOZORDER);
+	AdjustListColumns();
 
 	CRect tabRect;
-	m_tabView.GetWindowRect(&tabRect);
-	ScreenToClient(&tabRect);
-	m_tabView.SetWindowPos(NULL, tabRect.TopLeft().x, tabRect.TopLeft().y, rct.Width() - 17, tabRect.Height(), SWP_NOMOVE | SWP_NOZORDER);
+	if(layoutBaseCaptured) {
+		m_tabView.SetWindowPos(NULL, baseTabRect.left, baseTabRect.top + exportExtraTop, rct.Width() - 17, baseTabRect.Height(), SWP_NOZORDER);
+	} else {
+		m_tabView.GetWindowRect(&tabRect);
+		ScreenToClient(&tabRect);
+		m_tabView.SetWindowPos(NULL, tabRect.TopLeft().x, tabRect.TopLeft().y, rct.Width() - 17, tabRect.Height(), SWP_NOMOVE | SWP_NOZORDER);
+	}
 
 	CWnd* statusGroup = GetDlgItem(IDC_STATUS_GROUP);
 	if(statusGroup) {
-		statusGroup->SetWindowPos(NULL, lb.TopLeft().x, lb.TopLeft().y, rct.Width() - 17, rct.Height() - lb.top - 25, SWP_NOMOVE | SWP_NOZORDER);
+		int statusLeft = listLeft;
+		int statusTop = listTop;
+		statusGroup->SetWindowPos(NULL, statusLeft, statusTop, rct.Width() - 17, rct.Height() - statusTop - 25, SWP_NOZORDER);
 	}
 
 	CWnd* metricsCard = GetDlgItem(IDC_STATUS_CARD_METRICS);
 	CWnd* networkCard = GetDlgItem(IDC_STATUS_CARD_NETWORK);
 	if(metricsCard && networkCard) {
-		int left = lb.TopLeft().x + 5;
-		int top = lb.TopLeft().y + 9;
-		int height = rct.Height() - lb.top - 35;
+		int left = listLeft + 5;
+		int top = listTop + 9;
+		int height = rct.Height() - listTop - 35;
 		int width = rct.Width() - 27;
 		int gap = 8;
 		int minMetricsWidth = 180;

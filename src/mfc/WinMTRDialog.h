@@ -76,6 +76,14 @@ public:
 	COLORREF m_networkCardColor;
 	COLORREF m_statusTextColor;
 	COLORREF m_statusValueColor;
+	bool layoutBaseCaptured;
+	CRect baseStaticJRect;
+	CRect baseTabRect;
+	CRect baseListRect;
+	CRect baseStatusGroupRect;
+	int baseExportTop;
+	int baseExportLeft;
+	int baseExportHeight;
 	bool statusAutoTrace;
 	bool initCompleted;
 	bool initInProgress;
@@ -140,6 +148,7 @@ protected:
 	virtual void DoDataExchange(CDataExchange* pDX);
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	void ApplyColumnOrder();
+	void AdjustListColumns();
 	std::vector<char> ParseOrderFields(const std::string& order) const;
 	CString FormatFieldValue(char code, int index) const;
 	CString FormatIpInfo(int index) const;
