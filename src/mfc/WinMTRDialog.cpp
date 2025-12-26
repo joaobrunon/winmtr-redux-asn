@@ -754,7 +754,7 @@ void WinMTRDialog::UpdateStatusTab()
 	CString latency = avg;
 	CString jitter = formatMs(lastValid ? wmtrnet->GetJitterAvg(lastHop) : 0, lastValid);
 	CString loss = lastValid ? formatPct(wmtrnet->GetPercent(lastHop)) : CString("N/A");
-	CString resp = hasTrace ? "N/A" : "Start to measure";
+	CString resp = hasTrace ? "N/A" : "Sempre testando";
 	if(lastValid) {
 		int lossPct = wmtrnet->GetPercent(lastHop);
 		if(lossPct >= 0) {
