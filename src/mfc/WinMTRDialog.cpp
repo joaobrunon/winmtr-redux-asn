@@ -29,6 +29,50 @@
 static const char* IpinfoLabel(int mode);
 static const char* OrderLabel(char code);
 
+namespace {
+	struct StatusCardInfo {
+		int cardId;
+		int labelId;
+		bool isNetwork;
+	};
+
+	const StatusCardInfo kStatusCards[] = {
+		{IDC_STATUS_RESP_VALUE, IDC_STATUS_RESP_LABEL, false},
+		{IDC_STATUS_LAG_ROUTER_VALUE, IDC_STATUS_LAG_ROUTER_LABEL, false},
+		{IDC_STATUS_LAG_INET_VALUE, IDC_STATUS_LAG_INET_LABEL, false},
+		{IDC_STATUS_AVG_VALUE, IDC_STATUS_AVG_LABEL, false},
+		{IDC_STATUS_BEST_VALUE, IDC_STATUS_BEST_LABEL, false},
+		{IDC_STATUS_WORST_VALUE, IDC_STATUS_WORST_LABEL, false},
+		{IDC_STATUS_LATENCY_VALUE, IDC_STATUS_LATENCY_LABEL, false},
+		{IDC_STATUS_JITTER_VALUE, IDC_STATUS_JITTER_LABEL, false},
+		{IDC_STATUS_LOSS_VALUE, IDC_STATUS_LOSS_LABEL, false},
+		{IDC_STATUS_LAN_VALUE, IDC_STATUS_LAN_LABEL, true},
+		{IDC_STATUS_WAN_VALUE, IDC_STATUS_WAN_LABEL, true},
+		{IDC_STATUS_ASN_VALUE, IDC_STATUS_ASN_LABEL, true}
+	};
+
+	const int kStatusLabelIds[] = {
+		IDC_STATUS_RESP_LABEL,
+		IDC_STATUS_LAG_ROUTER_LABEL,
+		IDC_STATUS_LAG_INET_LABEL,
+		IDC_STATUS_AVG_LABEL,
+		IDC_STATUS_BEST_LABEL,
+		IDC_STATUS_WORST_LABEL,
+		IDC_STATUS_LATENCY_LABEL,
+		IDC_STATUS_JITTER_LABEL,
+		IDC_STATUS_LOSS_LABEL,
+		IDC_STATUS_LAN_LABEL,
+		IDC_STATUS_WAN_LABEL,
+		IDC_STATUS_ASN_LABEL
+	};
+
+	const int kStatusContainerIds[] = {
+		IDC_STATUS_GROUP,
+		IDC_STATUS_CARD_METRICS,
+		IDC_STATUS_CARD_NETWORK
+	};
+}
+
 #ifdef _DEBUG
 #	define TRACE_MSG(msg)									\
 	{														\
@@ -2239,53 +2283,11 @@ HBRUSH WinMTRDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 namespace {
 	COLORREF AdjustColor(COLORREF color, int delta)
 	{
-		const int r = min(255, max(0, static_cast<int>(GetRValue(color)) + delta));
-		const int g = min(255, max(0, static_cast<int>(GetGValue(color)) + delta));
-		const int b = min(255, max(0, static_cast<int>(GetBValue(color)) + delta));
+		const int r = std::min(255, std::max(0, static_cast<int>(GetRValue(color)) + delta));
+		const int g = std::min(255, std::max(0, static_cast<int>(GetGValue(color)) + delta));
+		const int b = std::min(255, std::max(0, static_cast<int>(GetBValue(color)) + delta));
 		return RGB(r, g, b);
 	}
-
-	struct StatusCardInfo {
-		int cardId;
-		int labelId;
-		bool isNetwork;
-	};
-
-	const StatusCardInfo kStatusCards[] = {
-		{IDC_STATUS_RESP_VALUE, IDC_STATUS_RESP_LABEL, false},
-		{IDC_STATUS_LAG_ROUTER_VALUE, IDC_STATUS_LAG_ROUTER_LABEL, false},
-		{IDC_STATUS_LAG_INET_VALUE, IDC_STATUS_LAG_INET_LABEL, false},
-		{IDC_STATUS_AVG_VALUE, IDC_STATUS_AVG_LABEL, false},
-		{IDC_STATUS_BEST_VALUE, IDC_STATUS_BEST_LABEL, false},
-		{IDC_STATUS_WORST_VALUE, IDC_STATUS_WORST_LABEL, false},
-		{IDC_STATUS_LATENCY_VALUE, IDC_STATUS_LATENCY_LABEL, false},
-		{IDC_STATUS_JITTER_VALUE, IDC_STATUS_JITTER_LABEL, false},
-		{IDC_STATUS_LOSS_VALUE, IDC_STATUS_LOSS_LABEL, false},
-		{IDC_STATUS_LAN_VALUE, IDC_STATUS_LAN_LABEL, true},
-		{IDC_STATUS_WAN_VALUE, IDC_STATUS_WAN_LABEL, true},
-		{IDC_STATUS_ASN_VALUE, IDC_STATUS_ASN_LABEL, true}
-	};
-
-	const int kStatusLabelIds[] = {
-		IDC_STATUS_RESP_LABEL,
-		IDC_STATUS_LAG_ROUTER_LABEL,
-		IDC_STATUS_LAG_INET_LABEL,
-		IDC_STATUS_AVG_LABEL,
-		IDC_STATUS_BEST_LABEL,
-		IDC_STATUS_WORST_LABEL,
-		IDC_STATUS_LATENCY_LABEL,
-		IDC_STATUS_JITTER_LABEL,
-		IDC_STATUS_LOSS_LABEL,
-		IDC_STATUS_LAN_LABEL,
-		IDC_STATUS_WAN_LABEL,
-		IDC_STATUS_ASN_LABEL
-	};
-
-	const int kStatusContainerIds[] = {
-		IDC_STATUS_GROUP,
-		IDC_STATUS_CARD_METRICS,
-		IDC_STATUS_CARD_NETWORK
-	};
 }
 
 void WinMTRDialog::DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fillColor, const CString& title, const CString& value)
