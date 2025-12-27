@@ -1439,9 +1439,9 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	CRect comboRect;
 	m_comboHost.GetWindowRect(&comboRect);
 	ScreenToClient(&comboRect);
-	checkLeft = max(checkLeft, comboRect.right + spacing);
+	checkLeft = std::max(checkLeft, comboRect.right + spacing);
 	if(hasStartRect) {
-		checkRight = min(checkRight, startRect.left - spacing);
+		checkRight = std::min(checkRight, startRect.left - spacing);
 	}
 	if(checkRight <= checkLeft) {
 		checkRight = rightGroup.right - 8;
