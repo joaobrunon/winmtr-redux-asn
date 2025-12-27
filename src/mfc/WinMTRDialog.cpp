@@ -889,6 +889,13 @@ void WinMTRDialog::UpdateStatusTab()
 	SetDlgItemText(IDC_STATUS_LAN_VALUE, lan);
 	SetDlgItemText(IDC_STATUS_WAN_VALUE, wan);
 	SetDlgItemText(IDC_STATUS_ASN_VALUE, asn);
+
+	for(const auto& info : kStatusCards) {
+		CWnd* ctrl = GetDlgItem(info.cardId);
+		if(ctrl) {
+			ctrl->Invalidate();
+		}
+	}
 }
 
 void WinMTRDialog::ApplyUiFont()
@@ -2355,6 +2362,8 @@ void WinMTRDialog::PrepareStatusCards()
 		CWnd* ctrl = GetDlgItem(info.cardId);
 		if(ctrl) {
 			ctrl->ModifyStyle(0, SS_OWNERDRAW);
+			ctrl->SetWindowPos(NULL, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 		}
 	}
 
