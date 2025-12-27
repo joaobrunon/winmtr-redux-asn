@@ -9,6 +9,14 @@
       </requestedPrivileges>
     </security>
   </trustInfo>
+  <asmv3:application xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+    <asmv3:windowsSettings xmlns:ms_windowsSettings="http://schemas.microsoft.com/SMI/2005/WindowsSettings">
+      <ms_windowsSettings:dpiAware>true</ms_windowsSettings:dpiAware>
+    </asmv3:windowsSettings>
+    <asmv3:windowsSettings xmlns:ms_windowsSettings="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
+      <ms_windowsSettings:dpiAwareness>PerMonitorV2</ms_windowsSettings:dpiAwareness>
+    </asmv3:windowsSettings>
+  </asmv3:application>
   <dependency>
     <dependentAssembly>
       <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0"

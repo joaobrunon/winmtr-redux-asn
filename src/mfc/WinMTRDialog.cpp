@@ -26,10 +26,41 @@
 #define WM_APP_UPDATE_IPINFO (WM_APP + 1)
 #define WM_APP_START_STATUS_TRACE (WM_APP + 2)
 
-static const char* IpinfoLabel(int mode);
-static const char* OrderLabel(char code);
+static CString IpinfoLabel(int mode);
+static CString OrderLabel(char code);
 
 namespace {
+	CString LoadResString(UINT id)
+	{
+		CString text;
+		text.LoadString(id);
+		return text;
+	}
+
+	CString GetLanguageTagFromRegistry()
+	{
+		CString tag = "en-US";
+		HKEY hKey = NULL;
+		HKEY hKeyConfig = NULL;
+		if(RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\WinMTR", 0, NULL, 0, KEY_READ, NULL, &hKey, NULL) != ERROR_SUCCESS) {
+			return tag;
+		}
+		if(RegCreateKeyEx(hKey, "Config", 0, NULL, 0, KEY_READ, NULL, &hKeyConfig, NULL) != ERROR_SUCCESS) {
+			RegCloseKey(hKey);
+			return tag;
+		}
+
+		char langTag[16] = {0};
+		DWORD size = sizeof(langTag);
+		if(RegQueryValueEx(hKeyConfig, "Language", 0, NULL, reinterpret_cast<unsigned char*>(langTag), &size) == ERROR_SUCCESS) {
+			tag = langTag;
+		}
+
+		RegCloseKey(hKeyConfig);
+		RegCloseKey(hKey);
+		return tag;
+	}
+
 	struct StatusCardInfo {
 		int cardId;
 		int labelId;
@@ -150,35 +181,35 @@ static std::string EscapeCsvField(const char* input)
 	return out;
 }
 
-static const char* IpinfoLabel(int mode)
+static CString IpinfoLabel(int mode)
 {
 	switch(mode) {
-	case 0: return "ASN";
-	case 1: return "Prefix";
-	case 2: return "Country";
-	case 3: return "Registry";
-	case 4: return "Allocated";
-	default: return "ASN";
+	case 0: return LoadResString(IDS_IPINFO_ASN);
+	case 1: return LoadResString(IDS_IPINFO_PREFIX);
+	case 2: return LoadResString(IDS_IPINFO_COUNTRY);
+	case 3: return LoadResString(IDS_IPINFO_REGISTRY);
+	case 4: return LoadResString(IDS_IPINFO_ALLOCATED);
+	default: return LoadResString(IDS_IPINFO_ASN);
 	}
 }
 
-static const char* OrderLabel(char code)
+static CString OrderLabel(char code)
 {
 	switch(code) {
-	case 'L': return "Loss %";
-	case 'D': return "Drop";
-	case 'R': return "Recv";
-	case 'S': return "Sent";
-	case 'N': return "Last";
-	case 'B': return "Best";
-	case 'A': return "Avg";
-	case 'W': return "Wrst";
-	case 'V': return "StDev";
-	case 'G': return "Gmean";
-	case 'J': return "Jttr";
-	case 'M': return "Javg";
-	case 'X': return "Jmax";
-	case 'I': return "Jint";
+	case 'L': return LoadResString(IDS_LIST_LOSS);
+	case 'D': return LoadResString(IDS_LIST_DROP);
+	case 'R': return LoadResString(IDS_LIST_RECV);
+	case 'S': return LoadResString(IDS_LIST_SENT);
+	case 'N': return LoadResString(IDS_LIST_LAST);
+	case 'B': return LoadResString(IDS_LIST_BEST);
+	case 'A': return LoadResString(IDS_LIST_AVG);
+	case 'W': return LoadResString(IDS_LIST_WRST);
+	case 'V': return LoadResString(IDS_LIST_STDEV);
+	case 'G': return LoadResString(IDS_LIST_GMEAN);
+	case 'J': return LoadResString(IDS_LIST_JTTR);
+	case 'M': return LoadResString(IDS_LIST_JAVG);
+	case 'X': return LoadResString(IDS_LIST_JMAX);
+	case 'I': return LoadResString(IDS_LIST_JINT);
 	default: return "";
 	}
 }
@@ -311,6 +342,9 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_WM_QUERYDRAGICON()
 	ON_WM_CTLCOLOR()
 	ON_WM_DRAWITEM()
+	ON_COMMAND(ID_LANG_ENGLISH, &WinMTRDialog::OnLanguageEnglish)
+	ON_COMMAND(ID_LANG_PORTUGUESE, &WinMTRDialog::OnLanguagePortuguese)
+	ON_COMMAND(ID_LANG_SPANISH, &WinMTRDialog::OnLanguageSpanish)
 	ON_BN_CLICKED(ID_RESTART, OnRestart)
 	ON_BN_CLICKED(ID_OPTIONS, OnOptions)
 	ON_BN_CLICKED(IDC_CHECK_SHOWIPS, OnToggleShowIps)
@@ -448,9 +482,9 @@ BOOL WinMTRDialog::OnInitDialog()
 	}
 	
 #ifndef  _WIN64
-	char caption[] = {"WinMTR (Redux) v1.00 32bit"};
+	CString caption = LoadResString(IDS_APP_CAPTION_32);
 #else
-	char caption[] = {"WinMTR (Redux) v1.00 64bit"};
+	CString caption = LoadResString(IDS_APP_CAPTION_64);
 #endif
 	
 	ApplyUiFont();
@@ -461,7 +495,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);
 	
 	if(!statusBar.Create(this))
-		AfxMessageBox("Error creating status bar");
+		AfxMessageBox(IDS_STATUS_BAR_ERROR);
 	statusBar.GetStatusBarCtrl().SetMinHeight(23);
 	
 	UINT sbi[1];
@@ -482,8 +516,8 @@ BOOL WinMTRDialog::OnInitDialog()
 		statusBar.SetPaneInfo(statusIndex, IDS_STRING_SB_NAME, SBPS_STRETCH, 0);
 	}
 
-	m_tabView.InsertItem(0, "MTR");
-	m_tabView.InsertItem(1, "Status");
+	m_tabView.InsertItem(0, LoadResString(IDS_TAB_MTR));
+	m_tabView.InsertItem(1, LoadResString(IDS_TAB_STATUS));
 	m_tabView.SetCurSel(0);
 	ShowTab(0);
 	m_metricsCardBrush.DeleteObject();
@@ -492,6 +526,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	m_networkCardBrush.CreateSolidBrush(m_networkCardColor);
 	ApplyStatusFonts();
 	PrepareStatusCards();
+	ApplyLanguageMenuState();
 
 	RefreshLocalIpInfo();
 	UpdateStatusTab();
@@ -586,7 +621,7 @@ BOOL WinMTRDialog::OnInitDialog()
 			} else if(m_comboHost.GetCount() > 0) {
 				CString first;
 				m_comboHost.GetLBText(0, first);
-				if(first.CompareNoCase(CString((LPCSTR)IDS_STRING_CLEAR_HISTORY)) != 0) {
+				if(first.CompareNoCase(LoadResString(IDS_STRING_CLEAR_HISTORY)) != 0) {
 					m_comboHost.SetWindowText(first);
 				}
 			}
@@ -636,30 +671,30 @@ void WinMTRDialog::ApplyColumnOrder()
 	while(m_listMTR.DeleteColumn(0)) {}
 	m_listMTR.DeleteAllItems();
 
-	m_listMTR.InsertColumn(0, "Host", LVCFMT_LEFT, 220, -1);
-	m_listMTR.InsertColumn(1, "Nr", LVCFMT_LEFT, 30, -1);
+	m_listMTR.InsertColumn(0, LoadResString(IDS_LIST_HOST), LVCFMT_LEFT, 220, -1);
+	m_listMTR.InsertColumn(1, LoadResString(IDS_LIST_NR), LVCFMT_LEFT, 30, -1);
 
-	auto addColumn = [&](const char* name, int width) {
+	auto addColumn = [&](const CString& name, int width) {
 		int index = m_listMTR.GetHeaderCtrl()->GetItemCount();
 		m_listMTR.InsertColumn(index, name, LVCFMT_RIGHT, width, -1);
 	};
 
 	for(char code : orderFields) {
 		switch(code) {
-		case 'L': addColumn("Loss %", 50); break;
-		case 'D': addColumn("Drop", 50); break;
-		case 'R': addColumn("Recv", 50); break;
-		case 'S': addColumn("Sent", 50); break;
-		case 'N': addColumn("Last", 50); break;
-		case 'B': addColumn("Best", 50); break;
-		case 'A': addColumn("Avg", 50); break;
-		case 'W': addColumn("Wrst", 50); break;
-		case 'V': addColumn("StDev", 50); break;
-		case 'G': addColumn("Gmean", 50); break;
-		case 'J': addColumn("Jttr", 50); break;
-		case 'M': addColumn("Javg", 50); break;
-		case 'X': addColumn("Jmax", 50); break;
-		case 'I': addColumn("Jint", 50); break;
+		case 'L': addColumn(LoadResString(IDS_LIST_LOSS), 50); break;
+		case 'D': addColumn(LoadResString(IDS_LIST_DROP), 50); break;
+		case 'R': addColumn(LoadResString(IDS_LIST_RECV), 50); break;
+		case 'S': addColumn(LoadResString(IDS_LIST_SENT), 50); break;
+		case 'N': addColumn(LoadResString(IDS_LIST_LAST), 50); break;
+		case 'B': addColumn(LoadResString(IDS_LIST_BEST), 50); break;
+		case 'A': addColumn(LoadResString(IDS_LIST_AVG), 50); break;
+		case 'W': addColumn(LoadResString(IDS_LIST_WRST), 50); break;
+		case 'V': addColumn(LoadResString(IDS_LIST_STDEV), 50); break;
+		case 'G': addColumn(LoadResString(IDS_LIST_GMEAN), 50); break;
+		case 'J': addColumn(LoadResString(IDS_LIST_JTTR), 50); break;
+		case 'M': addColumn(LoadResString(IDS_LIST_JAVG), 50); break;
+		case 'X': addColumn(LoadResString(IDS_LIST_JMAX), 50); break;
+		case 'I': addColumn(LoadResString(IDS_LIST_JINT), 50); break;
 		default: break;
 		}
 	}
@@ -776,7 +811,10 @@ CString WinMTRDialog::FormatHostLabel(int index) const
 {
 	char buf[255];
 	wmtrnet->GetName(index, buf);
-	if(!*buf) strcpy(buf, "No response from host");
+	if(!*buf) {
+		CString noResponse = LoadResString(IDS_STATUS_NO_RESPONSE);
+		strcpy(buf, CStringA(noResponse).GetString());
+	}
 
 	if(showIps) {
 		char ipbuf[NI_MAXHOST];
@@ -819,6 +857,8 @@ void WinMTRDialog::ShowTab(int index)
 
 void WinMTRDialog::UpdateStatusTab()
 {
+	CString naText = LoadResString(IDS_STATUS_NA);
+	CString alwaysTesting = LoadResString(IDS_STATUS_ALWAYS_TESTING);
 	bool hasTrace = (state == TRACING || state == STOPPING);
 	int nh = hasTrace ? wmtrnet->GetMax() : 0;
 	int lastHop = -1;
@@ -831,15 +871,15 @@ void WinMTRDialog::UpdateStatusTab()
 		}
 	}
 
-	auto formatMs = [](int value, bool valid) -> CString {
-		if(!valid) return "N/A";
+	auto formatMs = [&](int value, bool valid) -> CString {
+		if(!valid) return naText;
 		CString out;
 		out.Format("%d ms", value);
 		return out;
 	};
 
-	auto formatPct = [](int value) -> CString {
-		if(value < 0) return "N/A";
+	auto formatPct = [&](int value) -> CString {
+		if(value < 0) return naText;
 		CString out;
 		out.Format("%d%%", value);
 		return out;
@@ -856,8 +896,8 @@ void WinMTRDialog::UpdateStatusTab()
 	CString worst = formatMs(lastValid ? wmtrnet->GetWorst(lastHop) : 0, lastValid);
 	CString latency = avg;
 	CString jitter = formatMs(lastValid ? wmtrnet->GetJitterAvg(lastHop) : 0, lastValid);
-	CString loss = lastValid ? formatPct(wmtrnet->GetPercent(lastHop)) : CString("N/A");
-	CString resp = hasTrace ? "N/A" : "Sempre testando";
+	CString loss = lastValid ? formatPct(wmtrnet->GetPercent(lastHop)) : naText;
+	CString resp = hasTrace ? naText : alwaysTesting;
 	if(lastValid) {
 		int lossPct = wmtrnet->GetPercent(lastHop);
 		if(lossPct >= 0) {
@@ -888,9 +928,9 @@ void WinMTRDialog::UpdateStatusTab()
 		asn = wanAsn;
 	}
 
-	if(lan.IsEmpty()) lan = "N/A";
-	if(wan.IsEmpty()) wan = "N/A";
-	if(asn.IsEmpty()) asn = "N/A";
+	if(lan.IsEmpty()) lan = naText;
+	if(wan.IsEmpty()) wan = naText;
+	if(asn.IsEmpty()) asn = naText;
 
 	SetDlgItemText(IDC_STATUS_RESP_VALUE, resp);
 	SetDlgItemText(IDC_STATUS_LAG_ROUTER_VALUE, lagRouter);
@@ -1115,6 +1155,12 @@ BOOL WinMTRDialog::InitRegistry()
 	r = RegCreateKeyEx(hKey,"Config",0,NULL,0,KEY_ALL_ACCESS,NULL,&hKey_v,NULL);
 	if(r != ERROR_SUCCESS)
 		return FALSE;
+
+	char langTag[16] = "en-US";
+	value_size = sizeof(langTag);
+	if(RegQueryValueEx(hKey_v, "Language", 0, NULL, reinterpret_cast<unsigned char*>(langTag), &value_size) != ERROR_SUCCESS) {
+		RegSetValueEx(hKey_v, "Language", 0, REG_SZ, reinterpret_cast<const unsigned char*>("en-US"), static_cast<DWORD>(strlen("en-US") + 1));
+	}
 		
 	if(RegQueryValueEx(hKey_v, "PingSize", 0, NULL, (unsigned char*)&tmp_dword, &value_size) != ERROR_SUCCESS) {
 		tmp_dword = pingsize;
@@ -1253,7 +1299,7 @@ BOOL WinMTRDialog::InitRegistry()
 			}
 		}
 	}
-	m_comboHost.AddString(CString((LPCSTR)IDS_STRING_CLEAR_HISTORY));
+	m_comboHost.AddString(LoadResString(IDS_STRING_CLEAR_HISTORY));
 	RegCloseKey(hKey_v);
 	RegCloseKey(hKey);
 	return TRUE;
@@ -1390,6 +1436,17 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	ScreenToClient(&rightGroup);
 	int checkRight = rightGroup.right - 8;
 	int checkLeft = rightGroup.left + 6;
+	CRect comboRect;
+	m_comboHost.GetWindowRect(&comboRect);
+	ScreenToClient(&comboRect);
+	checkLeft = max(checkLeft, comboRect.right + spacing);
+	if(hasStartRect) {
+		checkRight = min(checkRight, startRect.left - spacing);
+	}
+	if(checkRight <= checkLeft) {
+		checkRight = rightGroup.right - 8;
+		checkLeft = rightGroup.left + 6;
+	}
 	CRect showIpsRect;
 	m_checkShowIps.GetWindowRect(&showIpsRect);
 	ScreenToClient(&showIpsRect);
@@ -1730,16 +1787,16 @@ void WinMTRDialog::OnRestart()
 		m_comboHost.GetWindowText(sHost);
 		sHost.TrimLeft(); sHost.TrimRight();
 		if(sHost.IsEmpty()) {
-			AfxMessageBox("No host specified!");
+			AfxMessageBox(IDS_ERR_NO_HOST);
 			m_comboHost.SetFocus();
 			return ;
 		}
 		if(probeMode == 1) {
-			AfxMessageBox("UDP mode is not supported in the MFC UI yet. Using ICMP.");
+			AfxMessageBox(IDS_WARN_UDP_NOT_SUPPORTED);
 			probeMode = 0;
 		}
 		if(probeMode == 2 && useIPv6 == 1) {
-			AfxMessageBox("TCP mode supports IPv4 only in the MFC UI. Using ICMP.");
+			AfxMessageBox(IDS_WARN_TCP_IPV4_ONLY);
 			probeMode = 0;
 		}
 		m_listMTR.DeleteAllItems();
@@ -1859,16 +1916,18 @@ void WinMTRDialog::OnOptions()
 void WinMTRDialog::OnCTTC()
 {
 	std::ostringstream out;
-	
+	CStringA hostLabelA(LoadResString(IDS_LIST_HOST));
+	CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
 	int nh = wmtrnet->GetMax();
 	int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 
-	out << "Host";
+	out << hostLabelA.GetString();
 	for(char code : orderFields) {
-		out << " | " << OrderLabel(code);
+		CStringA labelA(OrderLabel(code));
+		out << " | " << labelA.GetString();
 	}
 	if(asnEnabled) {
-		out << " | " << IpinfoLabel(ipinfoMode);
+		out << " | " << ipinfoLabelA.GetString();
 	}
 	out << "\r\n";
 
@@ -1912,19 +1971,24 @@ void WinMTRDialog::OnCTTC()
 void WinMTRDialog::OnCHTC()
 {
 	std::ostringstream html;
+	CStringA exportTitleA(LoadResString(IDS_EXPORT_TITLE));
+	CStringA exportHeaderA(LoadResString(IDS_EXPORT_HEADER));
+	CStringA hostLabelA(LoadResString(IDS_LIST_HOST));
+	CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
 	
 	int nh = wmtrnet->GetMax();
 	int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 	
-	html << "<html><head><title>WinMTR Statistics</title></head><body bgcolor=\"white\">\r\n";
-	html << "<center><h2>WinMTR statistics</h2></center>\r\n";
+	html << "<html><head><title>" << exportTitleA.GetString() << "</title></head><body bgcolor=\"white\">\r\n";
+	html << "<center><h2>" << exportHeaderA.GetString() << "</h2></center>\r\n";
 	html << "<p align=\"center\"> <table border=\"1\" align=\"center\">\r\n";
-	html << "<tr><td>Host</td>";
+	html << "<tr><td>" << hostLabelA.GetString() << "</td>";
 	for(char code : orderFields) {
-		html << "<td>" << OrderLabel(code) << "</td>";
+		CStringA labelA(OrderLabel(code));
+		html << "<td>" << labelA.GetString() << "</td>";
 	}
 	if(asnEnabled) {
-		html << "<td>" << IpinfoLabel(ipinfoMode) << "</td>";
+		html << "<td>" << ipinfoLabelA.GetString() << "</td>";
 	}
 	html << "</tr>\r\n";
 	
@@ -1969,25 +2033,28 @@ void WinMTRDialog::OnCHTC()
 //*****************************************************************************
 void WinMTRDialog::OnEXPT()
 {
-	TCHAR BASED_CODE szFilter[] = _T("Text Files (*.txt)|*.txt|All Files (*.*)|*.*||");
+	CString filter = LoadResString(IDS_FILTER_TEXT);
 	
 	CFileDialog dlg(FALSE,
 					_T("TXT"),
 					NULL,
 					OFN_HIDEREADONLY | OFN_EXPLORER,
-					szFilter,
+					filter,
 					this);
 	if(dlg.DoModal() == IDOK) {
 		int nh = wmtrnet->GetMax();
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 		std::ostringstream out;
 		
-		out << "Host";
+		CStringA hostLabelA(LoadResString(IDS_LIST_HOST));
+		CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
+		out << hostLabelA.GetString();
 		for(char code : orderFields) {
-			out << " | " << OrderLabel(code);
+			CStringA labelA(OrderLabel(code));
+			out << " | " << labelA.GetString();
 		}
 		if(asnEnabled) {
-			out << " | " << IpinfoLabel(ipinfoMode);
+			out << " | " << ipinfoLabelA.GetString();
 		}
 		out << "\r\n";
 		
@@ -2021,13 +2088,13 @@ void WinMTRDialog::OnEXPT()
 //*****************************************************************************
 void WinMTRDialog::OnEXPCSV()
 {
-	TCHAR BASED_CODE szFilter[] = _T("CSV Files (*.csv)|*.csv|All Files (*.*)|*.*||");
+	CString filter = LoadResString(IDS_FILTER_CSV);
 
 	CFileDialog dlg(FALSE,
 					_T("CSV"),
 					NULL,
 					OFN_HIDEREADONLY | OFN_EXPLORER,
-					szFilter,
+					filter,
 					this);
 	if(dlg.DoModal() == IDOK) {
 		char buf[255];
@@ -2035,12 +2102,15 @@ void WinMTRDialog::OnEXPCSV()
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 
 	std::ostringstream csv;
-	csv << "Host";
+	CStringA hostLabelA(LoadResString(IDS_LIST_HOST));
+	CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
+	csv << hostLabelA.GetString();
 	for(char code : orderFields) {
-		csv << "," << OrderLabel(code);
+		CStringA labelA(OrderLabel(code));
+		csv << "," << labelA.GetString();
 	}
 	if(asnEnabled) {
-		csv << "," << IpinfoLabel(ipinfoMode);
+		csv << "," << ipinfoLabelA.GetString();
 	}
 	csv << "\r\n";
 	csv << "FieldCodes";
@@ -2082,13 +2152,13 @@ void WinMTRDialog::OnEXPCSV()
 //*****************************************************************************
 void WinMTRDialog::OnEXPH()
 {
-	TCHAR BASED_CODE szFilter[] = _T("HTML Files (*.htm, *.html)|*.htm;*.html|All Files (*.*)|*.*||");
+	CString filter = LoadResString(IDS_FILTER_HTML);
 	
 	CFileDialog dlg(FALSE,
 					_T("HTML"),
 					NULL,
 					OFN_HIDEREADONLY | OFN_EXPLORER,
-					szFilter,
+					filter,
 					this);
 					
 	if(dlg.DoModal() == IDOK) {
@@ -2098,28 +2168,36 @@ void WinMTRDialog::OnEXPH()
 		int nh = wmtrnet->GetMax();
 		int startIndex = firstTtl > 0 ? firstTtl - 1 : 0;
 		
-		strcpy(f_buf, "<html><head><title>WinMTR Statistics</title></head><body bgcolor=\"white\">\r\n");
-		sprintf(t_buf, "<center><h2>WinMTR statistics</h2></center>\r\n");
+		CStringA exportTitleA(LoadResString(IDS_EXPORT_TITLE));
+		CStringA exportHeaderA(LoadResString(IDS_EXPORT_HEADER));
+		sprintf(f_buf, "<html><head><title>%s</title></head><body bgcolor=\"white\">\r\n", exportTitleA.GetString());
+		sprintf(t_buf, "<center><h2>%s</h2></center>\r\n", exportHeaderA.GetString());
 		strcat(f_buf, t_buf);
 		
 		sprintf(t_buf, "<p align=\"center\"> <table border=\"1\" align=\"center\">\r\n");
 		strcat(f_buf, t_buf);
 		
-		sprintf(t_buf, "<tr><td>Host</td>");
+		CStringA hostLabelA(LoadResString(IDS_LIST_HOST));
+		CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
+		sprintf(t_buf, "<tr><td>%s</td>", hostLabelA.GetString());
 		strcat(f_buf, t_buf);
 		for(char code : orderFields) {
-			sprintf(t_buf, " <td>%s</td>", OrderLabel(code));
+			CStringA labelA(OrderLabel(code));
+			sprintf(t_buf, " <td>%s</td>", labelA.GetString());
 			strcat(f_buf, t_buf);
 		}
 		if(asnEnabled) {
-			sprintf(t_buf, " <td>%s</td>", IpinfoLabel(ipinfoMode));
+			sprintf(t_buf, " <td>%s</td>", ipinfoLabelA.GetString());
 			strcat(f_buf, t_buf);
 		}
 		strcat(f_buf, "</tr>\r\n");
 		
 		for(int i = startIndex; i < nh; i++) {
 			wmtrnet->GetName(i, buf);
-			if(strcmp(buf,"")==0) strcpy(buf,"No response from host");
+			if(strcmp(buf,"")==0) {
+				CString noResponse = LoadResString(IDS_STATUS_NO_RESPONSE);
+				strcpy(buf, CStringA(noResponse).GetString());
+			}
 			
 			CString host = FormatHostLabel(i);
 			sprintf(t_buf, "<tr><td>%s</td>", host.GetString());
@@ -2158,13 +2236,13 @@ void WinMTRDialog::OnEXPH()
 //*****************************************************************************
 void WinMTRDialog::OnEXPJSON()
 {
-	TCHAR BASED_CODE szFilter[] = _T("JSON Files (*.json)|*.json|All Files (*.*)|*.*||");
+	CString filter = LoadResString(IDS_FILTER_JSON);
 
 	CFileDialog dlg(FALSE,
 					_T("JSON"),
 					NULL,
 					OFN_HIDEREADONLY | OFN_EXPLORER,
-					szFilter,
+					filter,
 					this);
 
 	if(dlg.DoModal() == IDOK) {
@@ -2180,12 +2258,14 @@ void WinMTRDialog::OnEXPJSON()
 		json << "  \"target\": \"" << EscapeJsonString((LPCTSTR)target) << "\",\r\n";
 		json << "  \"fields\": [";
 		for(size_t f = 0; f < orderFields.size(); ++f) {
-			json << "\"" << OrderLabel(orderFields[f]) << "\"";
+			CStringA labelA(OrderLabel(orderFields[f]));
+			json << "\"" << labelA.GetString() << "\"";
 			if(f + 1 < orderFields.size()) json << ", ";
 		}
 		if(asnEnabled) {
 			if(!orderFields.empty()) json << ", ";
-			json << "\"" << IpinfoLabel(ipinfoMode) << "\"";
+			CStringA ipinfoLabelA(IpinfoLabel(ipinfoMode));
+			json << "\"" << ipinfoLabelA.GetString() << "\"";
 		}
 		json << "],\r\n";
 		json << "  \"field_codes\": [";
@@ -2452,6 +2532,81 @@ void WinMTRDialog::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 	CDialog::OnDrawItem(nIDCtl, lpDrawItemStruct);
 }
 
+void WinMTRDialog::ApplyLanguageMenuState()
+{
+	CMenu* menu = GetMenu();
+	if(!menu) return;
+
+	CString tag = GetLanguageTagFromRegistry();
+	UINT checkId = ID_LANG_ENGLISH;
+	if(tag.CompareNoCase("pt-BR") == 0) {
+		checkId = ID_LANG_PORTUGUESE;
+	} else if(tag.CompareNoCase("es-ES") == 0) {
+		checkId = ID_LANG_SPANISH;
+	}
+	menu->CheckMenuRadioItem(ID_LANG_ENGLISH, ID_LANG_SPANISH, checkId, MF_BYCOMMAND);
+	DrawMenuBar();
+}
+
+void WinMTRDialog::ChangeLanguage(const char* langTag, LANGID langId)
+{
+	CString currentTag = GetLanguageTagFromRegistry();
+	if(currentTag.CompareNoCase(langTag) == 0) {
+		return;
+	}
+
+	HKEY hKey = NULL;
+	HKEY hKeyConfig = NULL;
+	if(RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\WinMTR", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+		if(RegCreateKeyEx(hKey, "Config", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKeyConfig, NULL) == ERROR_SUCCESS) {
+			RegSetValueEx(hKeyConfig, "Language", 0, REG_SZ, reinterpret_cast<const unsigned char*>(langTag), static_cast<DWORD>(strlen(langTag) + 1));
+			RegCloseKey(hKeyConfig);
+		}
+		RegCloseKey(hKey);
+	}
+
+	CString title = LoadResString(IDS_LANG_RESTART_TITLE);
+	CString body = LoadResString(IDS_LANG_RESTART_BODY);
+	int res = MessageBox(body, title, MB_YESNO | MB_ICONQUESTION);
+	if(res == IDYES) {
+		RestartWithCurrentCmd();
+		return;
+	}
+
+	SetThreadUILanguage(langId);
+	ApplyLanguageMenuState();
+}
+
+void WinMTRDialog::RestartWithCurrentCmd()
+{
+	CString cmd = GetCommandLine();
+	STARTUPINFO si{};
+	si.cb = sizeof(si);
+	PROCESS_INFORMATION pi{};
+	BOOL created = CreateProcess(NULL, cmd.GetBuffer(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+	cmd.ReleaseBuffer();
+	if(created) {
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	}
+	EndDialog(0);
+}
+
+void WinMTRDialog::OnLanguageEnglish()
+{
+	ChangeLanguage("en-US", MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
+}
+
+void WinMTRDialog::OnLanguagePortuguese()
+{
+	ChangeLanguage("pt-BR", MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN));
+}
+
+void WinMTRDialog::OnLanguageSpanish()
+{
+	ChangeLanguage("es-ES", MAKELANGID(LANG_SPANISH, SUBLANG_SPANISH_MODERN));
+}
+
 void WinMTRDialog::OnTabSelchange(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	ShowTab(m_tabView.GetCurSel());
@@ -2547,7 +2702,7 @@ int WinMTRDialog::InitMTRNet()
 	nfofilter.ai_flags=AI_NUMERICSERV|AI_ADDRCONFIG;//|AI_V4MAPPED;
 	if(getaddrinfo(hostname,NULL,&nfofilter,&anfo)||!anfo) {
 		SetStatusText(CString((LPCSTR)IDS_STRING_SB_NAME));
-		AfxMessageBox("Unable to resolve hostname.");
+		AfxMessageBox(IDS_ERR_RESOLVE_HOST);
 		return 0;
 	}
 	freeaddrinfo(anfo);
@@ -2583,7 +2738,7 @@ void PingThread(void* p)
 	nfofilter.ai_socktype=SOCK_RAW;
 	nfofilter.ai_flags=AI_NUMERICSERV|AI_ADDRCONFIG;//|AI_V4MAPPED;
 	if(getaddrinfo(hostname,NULL,&nfofilter,&anfo)||!anfo) { //we use first address returned
-		AfxMessageBox("Unable to resolve hostname. (again)");
+		AfxMessageBox(IDS_ERR_RESOLVE_HOST_AGAIN);
 		ReleaseMutex(wmtrdlg->traceThreadMutex);
 		return;
 	}
@@ -2591,14 +2746,14 @@ void PingThread(void* p)
 		if(anfo->ai_family == AF_INET) {
 			wmtrdlg->wmtrnet->DoTraceTcp(reinterpret_cast<sockaddr_in*>(anfo->ai_addr));
 		} else {
-			AfxMessageBox("TCP mode supports IPv4 only in the MFC UI.");
+			AfxMessageBox(IDS_WARN_TCP_IPV4_ONLY_MODE);
 			wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
 		}
 	} else if(wmtrdlg->probeMode == 1) {
 		if(anfo->ai_family == AF_INET) {
 			wmtrdlg->wmtrnet->DoTraceUdp(reinterpret_cast<sockaddr_in*>(anfo->ai_addr));
 		} else {
-			AfxMessageBox("UDP mode supports IPv4 only in the MFC UI.");
+			AfxMessageBox(IDS_WARN_UDP_IPV4_ONLY_MODE);
 			wmtrdlg->wmtrnet->DoTrace(anfo->ai_addr);
 		}
 	} else {
@@ -2688,7 +2843,7 @@ void WinMTRDialog::ClearHistory()
 	
 	m_comboHost.Clear();
 	m_comboHost.ResetContent();
-	m_comboHost.AddString(CString((LPCSTR)IDS_STRING_CLEAR_HISTORY));
+	m_comboHost.AddString(LoadResString(IDS_STRING_CLEAR_HISTORY));
 }
 
 void WinMTRDialog::OnCbnSelendokComboHost()

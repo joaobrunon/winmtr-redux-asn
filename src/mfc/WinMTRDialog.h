@@ -166,6 +166,9 @@ protected:
 	void ApplyStatusFonts();
 	void PrepareStatusCards();
 	void DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fillColor, const CString& title, const CString& value);
+	void ApplyLanguageMenuState();
+	void ChangeLanguage(const char* langTag, LANGID langId);
+	void RestartWithCurrentCmd();
 	CString m_statusCardTitles[12];
 	CString m_statusCardValues[12];
 	
@@ -185,6 +188,9 @@ protected:
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
 	virtual void OnCancel();
+	afx_msg void OnLanguageEnglish();
+	afx_msg void OnLanguagePortuguese();
+	afx_msg void OnLanguageSpanish();
 	
 	afx_msg void OnCTTC();
 	afx_msg void OnCHTC();

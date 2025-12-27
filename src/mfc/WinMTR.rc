@@ -73,6 +73,7 @@ IDR_MAINFRAME           ICON                    "WinMTR.ico"
 IDD_WINMTR_DIALOG DIALOGEX 0, 0, 420, 230
 STYLE DS_SETFONT | DS_3DLOOK | DS_CENTER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 EXSTYLE WS_EX_APPWINDOW
+MENU IDR_MENU_MAIN
 FONT 8, "MS Shell Dlg 2", 0, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "&Start",ID_RESTART,235,10,50,14,BS_FLAT
@@ -222,6 +223,21 @@ BEGIN
     LTEXT           "     --numeric, -n. Do not resolve names.",IDC_STATIC,26,78,129,8
 END
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_MAIN MENU
+BEGIN
+    POPUP "&Language"
+    BEGIN
+        MENUITEM "&English", ID_LANG_ENGLISH
+        MENUITEM "&Portugues", ID_LANG_PORTUGUESE
+        MENUITEM "&Espanol", ID_LANG_SPANISH
+    END
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -330,9 +346,536 @@ BEGIN
     IDS_STRING_SB_NAME      "WinMTR v1.00 GPLv2 (original by Appnor MSP - Fully Managed Hosting & Cloud Provider)"
     IDS_STRING_SB_PING      "0000000"
     IDS_STRING_CLEAR_HISTORY "Clear History"
+    IDS_APP_CAPTION_32      "WinMTR (Redux) v1.00 32bit"
+    IDS_APP_CAPTION_64      "WinMTR (Redux) v1.00 64bit"
+    IDS_TAB_MTR             "MTR"
+    IDS_TAB_STATUS          "Status"
+    IDS_STATUS_NA           "N/A"
+    IDS_STATUS_ALWAYS_TESTING "Always testing"
+    IDS_STATUS_NO_RESPONSE  "No response from host"
+    IDS_STATUS_BAR_ERROR    "Error creating status bar"
+    IDS_LANG_RESTART_TITLE  "Restart required"
+    IDS_LANG_RESTART_BODY   "Language change will take effect after restart. Restart now?"
+    IDS_LIST_HOST           "Host"
+    IDS_LIST_NR             "Nr"
+    IDS_LIST_LOSS           "Loss %"
+    IDS_LIST_DROP           "Drop"
+    IDS_LIST_RECV           "Recv"
+    IDS_LIST_SENT           "Sent"
+    IDS_LIST_LAST           "Last"
+    IDS_LIST_BEST           "Best"
+    IDS_LIST_AVG            "Avg"
+    IDS_LIST_WRST           "Wrst"
+    IDS_LIST_STDEV          "StDev"
+    IDS_LIST_GMEAN          "Gmean"
+    IDS_LIST_JTTR           "Jttr"
+    IDS_LIST_JAVG           "Javg"
+    IDS_LIST_JMAX           "Jmax"
+    IDS_LIST_JINT           "Jint"
+    IDS_IPINFO_ASN          "ASN"
+    IDS_IPINFO_PREFIX       "Prefix"
+    IDS_IPINFO_COUNTRY      "Country"
+    IDS_IPINFO_REGISTRY     "Registry"
+    IDS_IPINFO_ALLOCATED    "Allocated"
+    IDS_ERR_INIT_SOCKETS    "Failed initializing windows sockets library!"
+    IDS_ERR_WIN_VERSION     "Failed to get Windows version!"
+    IDS_ERR_ICMP_DLL        "Failed: Unable to locate ICMP.DLL!"
+    IDS_ERR_IPHLPAPI_DLL    "Failed: Unable to locate Iphlpapi.dll!"
+    IDS_ERR_ICMP_LIB        "Wrong ICMP system library!"
+    IDS_ERR_IPV6_SUPPORT    "IPv6 support not found!"
+    IDS_ERR_ICMP_MODULE     "Error in ICMP module!"
+    IDS_ERR_ICMPV6_MODULE   "Error in ICMPv6 module!"
+    IDS_ERR_ICMP_TCP_SOCKET "Failed to create raw ICMP socket for TCP mode."
+    IDS_ERR_ICMP_UDP_SOCKET "Failed to create raw ICMP socket for UDP mode."
+    IDS_ERR_UDP_SOCKET      "Failed to create UDP socket."
+    IDS_ERR_NO_HOST         "No host specified!"
+    IDS_WARN_UDP_NOT_SUPPORTED "UDP mode is not supported in the MFC UI yet. Using ICMP."
+    IDS_WARN_TCP_IPV4_ONLY  "TCP mode supports IPv4 only in the MFC UI. Using ICMP."
+    IDS_ERR_RESOLVE_HOST    "Unable to resolve hostname."
+    IDS_ERR_RESOLVE_HOST_AGAIN "Unable to resolve hostname. (again)"
+    IDS_WARN_TCP_IPV4_ONLY_MODE "TCP mode supports IPv4 only in the MFC UI."
+    IDS_WARN_UDP_IPV4_ONLY_MODE "UDP mode supports IPv4 only in the MFC UI."
+    IDS_EXPORT_TITLE        "WinMTR Statistics"
+    IDS_EXPORT_HEADER       "WinMTR statistics"
+    IDS_FILTER_TEXT         "Text Files (*.txt)|*.txt|All Files (*.*)|*.*||"
+    IDS_FILTER_CSV          "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*||"
+    IDS_FILTER_HTML         "HTML Files (*.htm, *.html)|*.htm;*.html|All Files (*.*)|*.*||"
+    IDS_FILTER_JSON         "JSON Files (*.json)|*.json|All Files (*.*)|*.*||"
 END
 
 #endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////
+// Portuguese (Brazil) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_PTB)
+LANGUAGE LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN
+#pragma code_page(1252)
+
+IDD_WINMTR_DIALOG DIALOGEX 0, 0, 420, 230
+STYLE DS_SETFONT | DS_3DLOOK | DS_CENTER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+EXSTYLE WS_EX_APPWINDOW
+MENU IDR_MENU_MAIN
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "&Iniciar",ID_RESTART,235,10,50,14,BS_FLAT
+    PUSHBUTTON      "&Opcoes",ID_OPTIONS,333,10,41,14,BS_FLAT
+    PUSHBUTTON      "&Sair",IDCANCEL,379,10,30,14,BS_FLAT
+    PUSHBUTTON      "&Copiar texto",ID_CTTC,12,37,89,14,BS_FLAT
+    PUSHBUTTON      "Copiar &HTML",ID_CHTC,111,37,89,14,BS_FLAT
+    PUSHBUTTON      "Exportar &CSV",ID_EXPCSV,203,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &JSON",ID_EXPJSON,255,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &TEXTO",ID_EXPT,307,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &HTML",ID_EXPH,360,37,50,14,BS_FLAT
+    CONTROL         "Tab1",IDC_TAB_VIEW,"SysTabControl32",WS_TABSTOP,5,55,409,13
+    CONTROL         "List1",IDC_LIST_MTR,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,5,70,409,155
+    GROUPBOX        "",IDC_STATUS_GROUP,5,70,409,155
+    GROUPBOX        "Desempenho",IDC_STATUS_CARD_METRICS,10,79,205,144
+    GROUPBOX        "Rede",IDC_STATUS_CARD_NETWORK,220,79,194,64
+    LTEXT           "Resposta",IDC_STATUS_RESP_LABEL,14,84,80,12,SS_CENTERIMAGE
+    LTEXT           "Atraso ao roteador",IDC_STATUS_LAG_ROUTER_LABEL,14,100,70,12,SS_CENTERIMAGE
+    LTEXT           "Atraso a internet",IDC_STATUS_LAG_INET_LABEL,14,116,80,12,SS_CENTERIMAGE
+    LTEXT           "Media",IDC_STATUS_AVG_LABEL,14,132,70,12,SS_CENTERIMAGE
+    LTEXT           "Melhor",IDC_STATUS_BEST_LABEL,14,148,70,12,SS_CENTERIMAGE
+    LTEXT           "Pior",IDC_STATUS_WORST_LABEL,14,164,70,12,SS_CENTERIMAGE
+    LTEXT           "Latencia tipica",IDC_STATUS_LATENCY_LABEL,14,180,80,12,SS_CENTERIMAGE
+    LTEXT           "Jitter tipico",IDC_STATUS_JITTER_LABEL,14,196,80,12,SS_CENTERIMAGE
+    LTEXT           "Perda",IDC_STATUS_LOSS_LABEL,14,212,70,12,SS_CENTERIMAGE
+    CONTROL         "N/A",IDC_STATUS_RESP_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,84,110,12
+    CONTROL         "N/A",IDC_STATUS_LAG_ROUTER_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,100,110,12
+    CONTROL         "N/A",IDC_STATUS_LAG_INET_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,116,110,12
+    CONTROL         "N/A",IDC_STATUS_AVG_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,132,110,12
+    CONTROL         "N/A",IDC_STATUS_BEST_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,148,110,12
+    CONTROL         "N/A",IDC_STATUS_WORST_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,164,110,12
+    CONTROL         "N/A",IDC_STATUS_LATENCY_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,180,110,12
+    CONTROL         "N/A",IDC_STATUS_JITTER_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,196,110,12
+    CONTROL         "N/A",IDC_STATUS_LOSS_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,212,110,12
+    LTEXT           "LAN",IDC_STATUS_LAN_LABEL,228,92,40,12,SS_CENTERIMAGE
+    LTEXT           "WAN",IDC_STATUS_WAN_LABEL,228,108,40,12,SS_CENTERIMAGE
+    LTEXT           "ASN",IDC_STATUS_ASN_LABEL,228,124,40,12,SS_CENTERIMAGE
+    CONTROL         "N/A",IDC_STATUS_LAN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,92,140,12
+    CONTROL         "N/A",IDC_STATUS_WAN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,108,140,12
+    CONTROL         "N/A",IDC_STATUS_ASN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,124,140,12
+    LTEXT           "Host:",IDC_STATIC,11,10,20,13,SS_LEFT | SS_CENTERIMAGE
+    GROUPBOX        "",IDC_STATIC,5,0,287,30,BS_FLAT
+    GROUPBOX        "",IDC_STATICS,295,0,120,30,BS_FLAT
+    GROUPBOX        "",IDC_STATICJ,5,29,409,26,BS_FLAT
+    COMBOBOX        IDC_COMBO_HOST,33,10,198,73,CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    AUTO3STATE      "IPv6",IDC_CHECK_IPV6,301,14,31,8
+    CONTROL         "Mostrar IPs",IDC_CHECK_SHOWIPS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,337,14,55,8
+END
+
+IDD_DIALOG_OPTIONS DIALOGEX 0, 0, 251, 232
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Opcoes"
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "&OK",IDOK,53,211,50,14,BS_FLAT
+    PUSHBUTTON      "&Cancelar",IDCANCEL,141,211,50,14,BS_FLAT
+    GROUPBOX        "",IDC_STATIC,7,86,237,120,BS_FLAT
+    ICON            IDR_MAINFRAME,IDC_STATIC,15,12,20,20
+    LTEXT           "Intervalo (s):",IDC_STATIC,15,97,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_INTERVAL,71,94,34,13,ES_AUTOHSCROLL
+    LTEXT           "Tamanho do ping (bytes):",IDC_STATIC,139,97,53,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_SIZE,196,94,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Max. saltos:",IDC_STATIC,15,111,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_MAX_HOPS,71,108,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "TTL inicial:",IDC_STATIC,139,111,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_FIRST_TTL,196,108,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Tempo limite (ms):",IDC_STATIC,15,125,50,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_TIMEOUT,71,122,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "TOS:",IDC_STATIC,139,125,20,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_TOS,196,122,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Padrao de bits:",IDC_STATIC,15,139,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_BITPATTERN,71,136,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Modo:",IDC_STATIC,139,139,22,10,NOT WS_GROUP
+    COMBOBOX        IDC_COMBO_MODE,167,136,63,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Porta:",IDC_STATIC,15,153,22,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_PORT,71,150,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Porta local:",IDC_STATIC,139,153,40,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_LOCALPORT,196,150,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Ordem:",IDC_STATIC,15,167,22,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_ORDER,71,164,159,13,ES_AUTOHSCROLL
+    CONTROL         "Resolver nomes",IDC_CHECK_DNS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,167,181,63,8
+    GROUPBOX        "",IDC_STATIC,7,7,237,82,BS_FLAT
+    CTEXT           "Hospedagem dedicada e cloud totalmente gerenciada na Europa e EUA a otimos precos.",IDC_STATIC,31,35,201,17
+    CTEXT           "WinMTR (Redux) v1.00 e oferecido sob GPLv2",IDC_STATIC,42,14,194,17
+    PUSHBUTTON      "&Licenca e creditos",ID_LICENSE,81,67,94,14,BS_FLAT
+    LTEXT           "Max. hosts na lista LRU:",IDC_STATIC,15,181,74,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_MAX_LRU,90,178,34,13,ES_AUTOHSCROLL
+    LTEXT           "www.appnor.com",IDC_STATIC,102,51,60,11,NOT WS_GROUP
+END
+
+IDD_DIALOG_LICENSE DIALOGEX 0, 0, 175, 70
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Licenca e Creditos"
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,62,36,50,14
+    LTEXT           "Saiba mais em",IDC_STATIC,36,21,46,8
+    LTEXT           "www.winmtr.net",IDC_STATIC,85,21,60,8
+    CTEXT           "WinMTR (Redux) e licenciado sob GPLv2.",IDC_STATIC,2,9,171,8,SS_CENTER
+    CTEXT           "https://github.com/White-Tiger/WinMTR",IDC_STATIC,7,57,161,8,SS_CENTER
+END
+
+IDD_DIALOG_PROPERTIES DIALOG 0, 0, 282, 160
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Propriedades do host"
+FONT 8, "MS Shell Dlg 2"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,116,140,50,14,BS_FLAT
+    LTEXT           "Nome:",IDC_STATIC,15,18,24,8
+    EDITTEXT        IDC_EDIT_PHOST,48,16,219,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Endereco IP:",IDC_STATIC,14,32,40,9
+    EDITTEXT        IDC_EDIT_PIP,58,31,209,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    GROUPBOX        "Pacotes",IDC_STATIC,46,74,89,60,BS_FLAT
+    GROUPBOX        "Tempo de ping",IDC_STATIC,147,74,86,60,BS_FLAT
+    GROUPBOX        "Host",IDC_STATIC,7,7,267,62,BS_FLAT
+    LTEXT           "Perda (%):",IDC_STATIC,52,117,31,9
+    LTEXT           "Recebidos:",IDC_STATIC,52,101,36,9
+    LTEXT           "Enviados:",IDC_STATIC,52,85,21,9
+    LTEXT           "Ultimo:",IDC_STATIC,153,84,18,9
+    LTEXT           "Melhor:",IDC_STATIC,153,96,20,8
+    LTEXT           "Media:",IDC_STATIC,153,107,32,8
+    LTEXT           "Pior:",IDC_STATIC,153,118,23,8
+    EDITTEXT        IDC_EDIT_PSENT,92,82,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PRECV,92,99,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PLOSS,92,116,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PLAST,189,81,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PBEST,189,94,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PAVRG,189,106,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PWORST,189,118,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PCOMMENT,14,50,253,12,ES_AUTOHSCROLL | ES_READONLY
+END
+
+IDD_DIALOG_HELP DIALOGEX 0, 0, 256, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "WinMTR"
+FONT 8, "MS Shell Dlg 2", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,144,101,50,14
+    LTEXT           "www.appnor.com",IDC_STATIC,187,9,60,11
+    LTEXT           "WinMTR (Redux) v1.00 e oferecido sob GPLv2",IDC_STATIC,7,9,176,10
+    LTEXT           "Uso: WinMTR [opcoes] nome_do_host",IDC_STATIC,7,29,144,8
+    LTEXT           "Opcoes:",IDC_STATIC,7,39,28,8
+    LTEXT           "     --interval, -i VALUE. Definir intervalo do ping.",IDC_STATIC,26,47,131,8
+    LTEXT           "     --size, -s VALUE. Definir tamanho do ping.",IDC_STATIC,26,57,109,8
+    LTEXT           "     --maxLRU, -m VALUE. Definir max. hosts na lista LRU.",IDC_STATIC,26,67,163,8
+    LTEXT           "     --help, -h. Mostrar esta ajuda.",IDC_STATIC,26,89,92,8
+    LTEXT           "     --numeric, -n. Nao resolver nomes.",IDC_STATIC,26,78,129,8
+END
+
+IDR_MENU_MAIN MENU
+BEGIN
+    POPUP "&Idioma"
+    BEGIN
+        MENUITEM "&Ingles", ID_LANG_ENGLISH
+        MENUITEM "&Portugues", ID_LANG_PORTUGUESE
+        MENUITEM "&Espanol", ID_LANG_SPANISH
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDP_SOCKETS_INIT_FAILED "Falha na inicializacao dos sockets do Windows."
+    IDS_STRING_SB_NAME      "WinMTR v1.00 GPLv2 (original by Appnor MSP - Fully Managed Hosting & Cloud Provider)"
+    IDS_STRING_SB_PING      "0000000"
+    IDS_STRING_CLEAR_HISTORY "Limpar historico"
+    IDS_APP_CAPTION_32      "WinMTR (Redux) v1.00 32bit"
+    IDS_APP_CAPTION_64      "WinMTR (Redux) v1.00 64bit"
+    IDS_TAB_MTR             "MTR"
+    IDS_TAB_STATUS          "Status"
+    IDS_STATUS_NA           "N/A"
+    IDS_STATUS_ALWAYS_TESTING "Sempre testando"
+    IDS_STATUS_NO_RESPONSE  "Sem resposta do host"
+    IDS_STATUS_BAR_ERROR    "Erro ao criar barra de status"
+    IDS_LANG_RESTART_TITLE  "Reinicio necessario"
+    IDS_LANG_RESTART_BODY   "A mudanca de idioma tera efeito apos reiniciar. Reiniciar agora?"
+    IDS_LIST_HOST           "Host"
+    IDS_LIST_NR             "Nr"
+    IDS_LIST_LOSS           "Perda %"
+    IDS_LIST_DROP           "Queda"
+    IDS_LIST_RECV           "Receb"
+    IDS_LIST_SENT           "Envi"
+    IDS_LIST_LAST           "Ult"
+    IDS_LIST_BEST           "Melhor"
+    IDS_LIST_AVG            "Media"
+    IDS_LIST_WRST           "Pior"
+    IDS_LIST_STDEV          "DesvPad"
+    IDS_LIST_GMEAN          "MediaG"
+    IDS_LIST_JTTR           "Jitter"
+    IDS_LIST_JAVG           "Jmed"
+    IDS_LIST_JMAX           "Jmax"
+    IDS_LIST_JINT           "Jint"
+    IDS_IPINFO_ASN          "ASN"
+    IDS_IPINFO_PREFIX       "Prefixo"
+    IDS_IPINFO_COUNTRY      "Pais"
+    IDS_IPINFO_REGISTRY     "Registro"
+    IDS_IPINFO_ALLOCATED    "Alocado"
+    IDS_ERR_INIT_SOCKETS    "Falha ao iniciar a biblioteca de sockets do Windows!"
+    IDS_ERR_WIN_VERSION     "Falha ao obter versao do Windows!"
+    IDS_ERR_ICMP_DLL        "Falha: nao foi possivel localizar ICMP.DLL!"
+    IDS_ERR_IPHLPAPI_DLL    "Falha: nao foi possivel localizar Iphlpapi.dll!"
+    IDS_ERR_ICMP_LIB        "Biblioteca ICMP incorreta!"
+    IDS_ERR_IPV6_SUPPORT    "Suporte IPv6 nao encontrado!"
+    IDS_ERR_ICMP_MODULE     "Erro no modulo ICMP!"
+    IDS_ERR_ICMPV6_MODULE   "Erro no modulo ICMPv6!"
+    IDS_ERR_ICMP_TCP_SOCKET "Falha ao criar socket ICMP raw para modo TCP."
+    IDS_ERR_ICMP_UDP_SOCKET "Falha ao criar socket ICMP raw para modo UDP."
+    IDS_ERR_UDP_SOCKET      "Falha ao criar socket UDP."
+    IDS_ERR_NO_HOST         "Nenhum host especificado!"
+    IDS_WARN_UDP_NOT_SUPPORTED "Modo UDP ainda nao suportado na UI MFC. Usando ICMP."
+    IDS_WARN_TCP_IPV4_ONLY  "Modo TCP suporta apenas IPv4 na UI MFC. Usando ICMP."
+    IDS_ERR_RESOLVE_HOST    "Nao foi possivel resolver o nome do host."
+    IDS_ERR_RESOLVE_HOST_AGAIN "Nao foi possivel resolver o nome do host. (novamente)"
+    IDS_WARN_TCP_IPV4_ONLY_MODE "Modo TCP suporta apenas IPv4 na UI MFC."
+    IDS_WARN_UDP_IPV4_ONLY_MODE "Modo UDP suporta apenas IPv4 na UI MFC."
+    IDS_EXPORT_TITLE        "Estatisticas WinMTR"
+    IDS_EXPORT_HEADER       "Estatisticas WinMTR"
+    IDS_FILTER_TEXT         "Arquivos de texto (*.txt)|*.txt|Todos os arquivos (*.*)|*.*||"
+    IDS_FILTER_CSV          "Arquivos CSV (*.csv)|*.csv|Todos os arquivos (*.*)|*.*||"
+    IDS_FILTER_HTML         "Arquivos HTML (*.htm, *.html)|*.htm;*.html|Todos os arquivos (*.*)|*.*||"
+    IDS_FILTER_JSON         "Arquivos JSON (*.json)|*.json|Todos os arquivos (*.*)|*.*||"
+END
+
+#endif    // Portuguese (Brazil) resources
+/////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////
+// Spanish (Modern) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ESN)
+LANGUAGE LANG_SPANISH, SUBLANG_SPANISH_MODERN
+#pragma code_page(1252)
+
+IDD_WINMTR_DIALOG DIALOGEX 0, 0, 420, 230
+STYLE DS_SETFONT | DS_3DLOOK | DS_CENTER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+EXSTYLE WS_EX_APPWINDOW
+MENU IDR_MENU_MAIN
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "&Iniciar",ID_RESTART,235,10,50,14,BS_FLAT
+    PUSHBUTTON      "&Opciones",ID_OPTIONS,333,10,41,14,BS_FLAT
+    PUSHBUTTON      "&Salir",IDCANCEL,379,10,30,14,BS_FLAT
+    PUSHBUTTON      "&Copiar texto",ID_CTTC,12,37,89,14,BS_FLAT
+    PUSHBUTTON      "Copiar &HTML",ID_CHTC,111,37,89,14,BS_FLAT
+    PUSHBUTTON      "Exportar &CSV",ID_EXPCSV,203,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &JSON",ID_EXPJSON,255,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &TEXTO",ID_EXPT,307,37,50,14,BS_FLAT
+    PUSHBUTTON      "Exportar &HTML",ID_EXPH,360,37,50,14,BS_FLAT
+    CONTROL         "Tab1",IDC_TAB_VIEW,"SysTabControl32",WS_TABSTOP,5,55,409,13
+    CONTROL         "List1",IDC_LIST_MTR,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,5,70,409,155
+    GROUPBOX        "",IDC_STATUS_GROUP,5,70,409,155
+    GROUPBOX        "Rendimiento",IDC_STATUS_CARD_METRICS,10,79,205,144
+    GROUPBOX        "Red",IDC_STATUS_CARD_NETWORK,220,79,194,64
+    LTEXT           "Respuesta",IDC_STATUS_RESP_LABEL,14,84,80,12,SS_CENTERIMAGE
+    LTEXT           "Latencia al router",IDC_STATUS_LAG_ROUTER_LABEL,14,100,70,12,SS_CENTERIMAGE
+    LTEXT           "Latencia a internet",IDC_STATUS_LAG_INET_LABEL,14,116,80,12,SS_CENTERIMAGE
+    LTEXT           "Promedio",IDC_STATUS_AVG_LABEL,14,132,70,12,SS_CENTERIMAGE
+    LTEXT           "Mejor",IDC_STATUS_BEST_LABEL,14,148,70,12,SS_CENTERIMAGE
+    LTEXT           "Peor",IDC_STATUS_WORST_LABEL,14,164,70,12,SS_CENTERIMAGE
+    LTEXT           "Latencia tipica",IDC_STATUS_LATENCY_LABEL,14,180,80,12,SS_CENTERIMAGE
+    LTEXT           "Jitter tipico",IDC_STATUS_JITTER_LABEL,14,196,80,12,SS_CENTERIMAGE
+    LTEXT           "Perdida",IDC_STATUS_LOSS_LABEL,14,212,70,12,SS_CENTERIMAGE
+    CONTROL         "N/A",IDC_STATUS_RESP_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,84,110,12
+    CONTROL         "N/A",IDC_STATUS_LAG_ROUTER_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,100,110,12
+    CONTROL         "N/A",IDC_STATUS_LAG_INET_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,116,110,12
+    CONTROL         "N/A",IDC_STATUS_AVG_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,132,110,12
+    CONTROL         "N/A",IDC_STATUS_BEST_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,148,110,12
+    CONTROL         "N/A",IDC_STATUS_WORST_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,164,110,12
+    CONTROL         "N/A",IDC_STATUS_LATENCY_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,180,110,12
+    CONTROL         "N/A",IDC_STATUS_JITTER_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,196,110,12
+    CONTROL         "N/A",IDC_STATUS_LOSS_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,95,212,110,12
+    LTEXT           "LAN",IDC_STATUS_LAN_LABEL,228,92,40,12,SS_CENTERIMAGE
+    LTEXT           "WAN",IDC_STATUS_WAN_LABEL,228,108,40,12,SS_CENTERIMAGE
+    LTEXT           "ASN",IDC_STATUS_ASN_LABEL,228,124,40,12,SS_CENTERIMAGE
+    CONTROL         "N/A",IDC_STATUS_LAN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,92,140,12
+    CONTROL         "N/A",IDC_STATUS_WAN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,108,140,12
+    CONTROL         "N/A",IDC_STATUS_ASN_VALUE,"Static",SS_OWNERDRAW | SS_CENTERIMAGE,268,124,140,12
+    LTEXT           "Host:",IDC_STATIC,11,10,20,13,SS_LEFT | SS_CENTERIMAGE
+    GROUPBOX        "",IDC_STATIC,5,0,287,30,BS_FLAT
+    GROUPBOX        "",IDC_STATICS,295,0,120,30,BS_FLAT
+    GROUPBOX        "",IDC_STATICJ,5,29,409,26,BS_FLAT
+    COMBOBOX        IDC_COMBO_HOST,33,10,198,73,CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    AUTO3STATE      "IPv6",IDC_CHECK_IPV6,301,14,31,8
+    CONTROL         "Mostrar IPs",IDC_CHECK_SHOWIPS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,337,14,55,8
+END
+
+IDD_DIALOG_OPTIONS DIALOGEX 0, 0, 251, 232
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Opciones"
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "&Aceptar",IDOK,53,211,50,14,BS_FLAT
+    PUSHBUTTON      "&Cancelar",IDCANCEL,141,211,50,14,BS_FLAT
+    GROUPBOX        "",IDC_STATIC,7,86,237,120,BS_FLAT
+    ICON            IDR_MAINFRAME,IDC_STATIC,15,12,20,20
+    LTEXT           "Intervalo (s):",IDC_STATIC,15,97,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_INTERVAL,71,94,34,13,ES_AUTOHSCROLL
+    LTEXT           "Tamano de ping (bytes):",IDC_STATIC,139,97,53,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_SIZE,196,94,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Max. saltos:",IDC_STATIC,15,111,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_MAX_HOPS,71,108,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "TTL inicial:",IDC_STATIC,139,111,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_FIRST_TTL,196,108,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Tiempo de espera (ms):",IDC_STATIC,15,125,50,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_TIMEOUT,71,122,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "TOS:",IDC_STATIC,139,125,20,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_TOS,196,122,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Patron de bits:",IDC_STATIC,15,139,45,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_BITPATTERN,71,136,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Modo:",IDC_STATIC,139,139,22,10,NOT WS_GROUP
+    COMBOBOX        IDC_COMBO_MODE,167,136,63,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Puerto:",IDC_STATIC,15,153,22,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_PORT,71,150,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Puerto local:",IDC_STATIC,139,153,40,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_LOCALPORT,196,150,34,13,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Orden:",IDC_STATIC,15,167,22,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_ORDER,71,164,159,13,ES_AUTOHSCROLL
+    CONTROL         "Resolver nombres",IDC_CHECK_DNS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,167,181,63,8
+    GROUPBOX        "",IDC_STATIC,7,7,237,82,BS_FLAT
+    CTEXT           "Hosting dedicado y cloud totalmente gestionado en Europa y EE. UU. a excelentes precios.",IDC_STATIC,31,35,201,17
+    CTEXT           "WinMTR (Redux) v1.00 se ofrece bajo GPLv2",IDC_STATIC,42,14,194,17
+    PUSHBUTTON      "&Licencia y creditos",ID_LICENSE,81,67,94,14,BS_FLAT
+    LTEXT           "Max. hosts en lista LRU:",IDC_STATIC,15,181,74,10,NOT WS_GROUP
+    EDITTEXT        IDC_EDIT_MAX_LRU,90,178,34,13,ES_AUTOHSCROLL
+    LTEXT           "www.appnor.com",IDC_STATIC,102,51,60,11,NOT WS_GROUP
+END
+
+IDD_DIALOG_LICENSE DIALOGEX 0, 0, 175, 70
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Licencia y Creditos"
+FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,62,36,50,14
+    LTEXT           "Mas informacion en",IDC_STATIC,36,21,46,8
+    LTEXT           "www.winmtr.net",IDC_STATIC,85,21,60,8
+    CTEXT           "WinMTR (Redux) esta licenciado bajo GPLv2.",IDC_STATIC,2,9,171,8,SS_CENTER
+    CTEXT           "https://github.com/White-Tiger/WinMTR",IDC_STATIC,7,57,161,8,SS_CENTER
+END
+
+IDD_DIALOG_PROPERTIES DIALOG 0, 0, 282, 160
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Propiedades del host"
+FONT 8, "MS Shell Dlg 2"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,116,140,50,14,BS_FLAT
+    LTEXT           "Nombre:",IDC_STATIC,15,18,24,8
+    EDITTEXT        IDC_EDIT_PHOST,48,16,219,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Direccion IP:",IDC_STATIC,14,32,40,9
+    EDITTEXT        IDC_EDIT_PIP,58,31,209,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    GROUPBOX        "Paquetes",IDC_STATIC,46,74,89,60,BS_FLAT
+    GROUPBOX        "Tiempo de ping",IDC_STATIC,147,74,86,60,BS_FLAT
+    GROUPBOX        "Host",IDC_STATIC,7,7,267,62,BS_FLAT
+    LTEXT           "Perdida (%):",IDC_STATIC,52,117,31,9
+    LTEXT           "Recibidos:",IDC_STATIC,52,101,36,9
+    LTEXT           "Enviados:",IDC_STATIC,52,85,21,9
+    LTEXT           "Ultimo:",IDC_STATIC,153,84,18,9
+    LTEXT           "Mejor:",IDC_STATIC,153,96,20,8
+    LTEXT           "Promedio:",IDC_STATIC,153,107,32,8
+    LTEXT           "Peor:",IDC_STATIC,153,118,23,8
+    EDITTEXT        IDC_EDIT_PSENT,92,82,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PRECV,92,99,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PLOSS,92,116,35,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    EDITTEXT        IDC_EDIT_PLAST,189,81,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PBEST,189,94,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PAVRG,189,106,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PWORST,189,118,34,12,ES_RIGHT | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_EDIT_PCOMMENT,14,50,253,12,ES_AUTOHSCROLL | ES_READONLY
+END
+
+IDD_DIALOG_HELP DIALOGEX 0, 0, 256, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "WinMTR"
+FONT 8, "MS Shell Dlg 2", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,144,101,50,14
+    LTEXT           "www.appnor.com",IDC_STATIC,187,9,60,11
+    LTEXT           "WinMTR (Redux) v1.00 se ofrece bajo GPLv2",IDC_STATIC,7,9,176,10
+    LTEXT           "Uso: WinMTR [opciones] nombre_del_host",IDC_STATIC,7,29,144,8
+    LTEXT           "Opciones:",IDC_STATIC,7,39,28,8
+    LTEXT           "     --interval, -i VALUE. Establecer intervalo de ping.",IDC_STATIC,26,47,131,8
+    LTEXT           "     --size, -s VALUE. Establecer tamano de ping.",IDC_STATIC,26,57,109,8
+    LTEXT           "     --maxLRU, -m VALUE. Establecer max. hosts en lista LRU.",IDC_STATIC,26,67,163,8
+    LTEXT           "     --help, -h. Mostrar esta ayuda.",IDC_STATIC,26,89,92,8
+    LTEXT           "     --numeric, -n. No resolver nombres.",IDC_STATIC,26,78,129,8
+END
+
+IDR_MENU_MAIN MENU
+BEGIN
+    POPUP "&Idioma"
+    BEGIN
+        MENUITEM "&Ingles", ID_LANG_ENGLISH
+        MENUITEM "&Portugues", ID_LANG_PORTUGUESE
+        MENUITEM "&Espanol", ID_LANG_SPANISH
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDP_SOCKETS_INIT_FAILED "Fallo al iniciar la biblioteca de sockets de Windows."
+    IDS_STRING_SB_NAME      "WinMTR v1.00 GPLv2 (original by Appnor MSP - Fully Managed Hosting & Cloud Provider)"
+    IDS_STRING_SB_PING      "0000000"
+    IDS_STRING_CLEAR_HISTORY "Limpiar historial"
+    IDS_APP_CAPTION_32      "WinMTR (Redux) v1.00 32bit"
+    IDS_APP_CAPTION_64      "WinMTR (Redux) v1.00 64bit"
+    IDS_TAB_MTR             "MTR"
+    IDS_TAB_STATUS          "Status"
+    IDS_STATUS_NA           "N/A"
+    IDS_STATUS_ALWAYS_TESTING "Siempre probando"
+    IDS_STATUS_NO_RESPONSE  "Sin respuesta del host"
+    IDS_STATUS_BAR_ERROR    "Error al crear barra de estado"
+    IDS_LANG_RESTART_TITLE  "Reinicio requerido"
+    IDS_LANG_RESTART_BODY   "El cambio de idioma se aplicara tras reiniciar. Reiniciar ahora?"
+    IDS_LIST_HOST           "Host"
+    IDS_LIST_NR             "Nr"
+    IDS_LIST_LOSS           "Perdida %"
+    IDS_LIST_DROP           "Caida"
+    IDS_LIST_RECV           "Recib"
+    IDS_LIST_SENT           "Envi"
+    IDS_LIST_LAST           "Ult"
+    IDS_LIST_BEST           "Mejor"
+    IDS_LIST_AVG            "Prom"
+    IDS_LIST_WRST           "Peor"
+    IDS_LIST_STDEV          "Desv"
+    IDS_LIST_GMEAN          "MediaG"
+    IDS_LIST_JTTR           "Jitter"
+    IDS_LIST_JAVG           "Jprom"
+    IDS_LIST_JMAX           "Jmax"
+    IDS_LIST_JINT           "Jint"
+    IDS_IPINFO_ASN          "ASN"
+    IDS_IPINFO_PREFIX       "Prefijo"
+    IDS_IPINFO_COUNTRY      "Pais"
+    IDS_IPINFO_REGISTRY     "Registro"
+    IDS_IPINFO_ALLOCATED    "Asignado"
+    IDS_ERR_INIT_SOCKETS    "Fallo al iniciar la biblioteca de sockets de Windows!"
+    IDS_ERR_WIN_VERSION     "Fallo al obtener version de Windows!"
+    IDS_ERR_ICMP_DLL        "Fallo: no se pudo localizar ICMP.DLL!"
+    IDS_ERR_IPHLPAPI_DLL    "Fallo: no se pudo localizar Iphlpapi.dll!"
+    IDS_ERR_ICMP_LIB        "Biblioteca ICMP incorrecta!"
+    IDS_ERR_IPV6_SUPPORT    "No se encontro soporte IPv6!"
+    IDS_ERR_ICMP_MODULE     "Error en el modulo ICMP!"
+    IDS_ERR_ICMPV6_MODULE   "Error en el modulo ICMPv6!"
+    IDS_ERR_ICMP_TCP_SOCKET "Fallo al crear socket ICMP raw para modo TCP."
+    IDS_ERR_ICMP_UDP_SOCKET "Fallo al crear socket ICMP raw para modo UDP."
+    IDS_ERR_UDP_SOCKET      "Fallo al crear socket UDP."
+    IDS_ERR_NO_HOST         "No se especifico host!"
+    IDS_WARN_UDP_NOT_SUPPORTED "El modo UDP aun no es compatible en la UI MFC. Usando ICMP."
+    IDS_WARN_TCP_IPV4_ONLY  "El modo TCP solo soporta IPv4 en la UI MFC. Usando ICMP."
+    IDS_ERR_RESOLVE_HOST    "No se pudo resolver el nombre del host."
+    IDS_ERR_RESOLVE_HOST_AGAIN "No se pudo resolver el nombre del host. (otra vez)"
+    IDS_WARN_TCP_IPV4_ONLY_MODE "El modo TCP solo soporta IPv4 en la UI MFC."
+    IDS_WARN_UDP_IPV4_ONLY_MODE "El modo UDP solo soporta IPv4 en la UI MFC."
+    IDS_EXPORT_TITLE        "Estadisticas WinMTR"
+    IDS_EXPORT_HEADER       "Estadisticas WinMTR"
+    IDS_FILTER_TEXT         "Archivos de texto (*.txt)|*.txt|Todos los archivos (*.*)|*.*||"
+    IDS_FILTER_CSV          "Archivos CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*||"
+    IDS_FILTER_HTML         "Archivos HTML (*.htm, *.html)|*.htm;*.html|Todos los archivos (*.*)|*.*||"
+    IDS_FILTER_JSON         "Archivos JSON (*.json)|*.json|Todos los archivos (*.*)|*.*||"
+END
+
+#endif    // Spanish (Modern) resources
 /////////////////////////////////////////////////////////////////////////////
 
 

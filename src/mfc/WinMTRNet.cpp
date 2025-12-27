@@ -108,28 +108,28 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	WSADATA wsaData;
 	
 	if(WSAStartup(MAKEWORD(2, 2), &wsaData)) {
-		AfxMessageBox("Failed initializing windows sockets library!");
+		AfxMessageBox(IDS_ERR_INIT_SOCKETS);
 		AppendStartupLog("WinMTRNet WSAStartup failed");
 		return;
 	}
 	OSVERSIONINFOEX osvi= {0};
 	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFOEX);
 	if(!GetVersionEx((OSVERSIONINFO*) &osvi)) {
-		AfxMessageBox("Failed to get Windows version!");
+		AfxMessageBox(IDS_ERR_WIN_VERSION);
 		AppendStartupLog("WinMTRNet GetVersionEx failed");
 		return;
 	}
 	if(osvi.dwMajorVersion==5 && osvi.dwMinorVersion==0) { //w2k
 		hICMP_DLL=LoadLibrary(_T("ICMP.DLL"));
 		if(!hICMP_DLL) {
-			AfxMessageBox("Failed: Unable to locate ICMP.DLL!");
+			AfxMessageBox(IDS_ERR_ICMP_DLL);
 			AppendStartupLog("WinMTRNet LoadLibrary ICMP.DLL failed");
 			return;
 		}
 	} else {
 		hICMP_DLL=LoadLibrary(_T("Iphlpapi.dll"));
 		if(!hICMP_DLL) {
-			AfxMessageBox("Failed: Unable to locate Iphlpapi.dll!");
+			AfxMessageBox(IDS_ERR_IPHLPAPI_DLL);
 			AppendStartupLog("WinMTRNet LoadLibrary Iphlpapi.dll failed");
 			return;
 		}
@@ -143,7 +143,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	lpfnIcmpCloseHandle = (LPFNICMPCLOSEHANDLE)GetProcAddress(hICMP_DLL,"IcmpCloseHandle");
 	lpfnIcmpSendEcho2   = (LPFNICMPSENDECHO2)GetProcAddress(hICMP_DLL,"IcmpSendEcho2");
 	if(!lpfnIcmpCreateFile || !lpfnIcmpCloseHandle || !lpfnIcmpSendEcho2) {
-		AfxMessageBox("Wrong ICMP system library !");
+		AfxMessageBox(IDS_ERR_ICMP_LIB);
 		AppendStartupLog("WinMTRNet IcmpCreate/Close/Send missing");
 		return;
 	}
@@ -152,7 +152,7 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	lpfnIcmp6SendEcho2=(LPFNICMP6SENDECHO2)GetProcAddress(hICMP_DLL,"Icmp6SendEcho2");
 	if(!lpfnIcmp6CreateFile || !lpfnIcmp6SendEcho2) {
 		hasIPv6=false;
-		AfxMessageBox("IPv6 support not found!");
+		AfxMessageBox(IDS_ERR_IPV6_SUPPORT);
 		AppendStartupLog("WinMTRNet IPv6 ICMP not found");
 	}
 	
@@ -161,14 +161,14 @@ WinMTRNet::WinMTRNet(WinMTRDialog* wp)
 	 */
 	hICMP = (HANDLE) lpfnIcmpCreateFile();
 	if(hICMP == INVALID_HANDLE_VALUE) {
-		AfxMessageBox("Error in ICMP module!");
+		AfxMessageBox(IDS_ERR_ICMP_MODULE);
 		AppendStartupLog("WinMTRNet IcmpCreateFile failed");
 		return;
 	}
 	if(hasIPv6) {
 		hICMP6=(HANDLE)lpfnIcmp6CreateFile();
 		if(hICMP6==INVALID_HANDLE_VALUE) {
-			AfxMessageBox("Error in ICMPv6 module!");
+			AfxMessageBox(IDS_ERR_ICMPV6_MODULE);
 			hasIPv6=false;
 			AppendStartupLog("WinMTRNet Icmp6CreateFile failed");
 		}
@@ -262,7 +262,7 @@ void WinMTRNet::DoTraceTcp(sockaddr_in* addr)
 
 	SOCKET icmpSock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if(icmpSock == INVALID_SOCKET) {
-		AfxMessageBox("Failed to create raw ICMP socket for TCP mode.");
+		AfxMessageBox(IDS_ERR_ICMP_TCP_SOCKET);
 		tracing = false;
 		return;
 	}
@@ -398,7 +398,7 @@ void WinMTRNet::DoTraceUdp(sockaddr_in* addr)
 
 	SOCKET icmpSock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if(icmpSock == INVALID_SOCKET) {
-		AfxMessageBox("Failed to create raw ICMP socket for UDP mode.");
+		AfxMessageBox(IDS_ERR_ICMP_UDP_SOCKET);
 		tracing = false;
 		return;
 	}
@@ -406,7 +406,7 @@ void WinMTRNet::DoTraceUdp(sockaddr_in* addr)
 	SOCKET udpSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if(udpSock == INVALID_SOCKET) {
 		closesocket(icmpSock);
-		AfxMessageBox("Failed to create UDP socket.");
+		AfxMessageBox(IDS_ERR_UDP_SOCKET);
 		tracing = false;
 		return;
 	}

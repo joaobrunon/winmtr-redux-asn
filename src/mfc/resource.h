@@ -7,6 +7,61 @@
 #define IDS_STRING_SB_NAME              104
 #define IDS_STRING_SB_PING              105
 #define IDS_STRING_CLEAR_HISTORY        106
+#define IDS_APP_CAPTION_32              107
+#define IDS_APP_CAPTION_64              108
+#define IDS_TAB_MTR                     109
+#define IDS_TAB_STATUS                  110
+#define IDS_STATUS_NA                   111
+#define IDS_STATUS_ALWAYS_TESTING       112
+#define IDS_STATUS_NO_RESPONSE          113
+#define IDS_STATUS_BAR_ERROR            114
+#define IDS_LANG_RESTART_TITLE          115
+#define IDS_LANG_RESTART_BODY           116
+#define IDS_LIST_HOST                   117
+#define IDS_LIST_NR                     118
+#define IDS_LIST_LOSS                   119
+#define IDS_LIST_DROP                   120
+#define IDS_LIST_RECV                   121
+#define IDS_LIST_SENT                   122
+#define IDS_LIST_LAST                   123
+#define IDS_LIST_BEST                   124
+#define IDS_LIST_AVG                    125
+#define IDS_LIST_WRST                   126
+#define IDS_LIST_STDEV                  127
+#define IDS_LIST_GMEAN                  128
+#define IDS_LIST_JTTR                   129
+#define IDS_LIST_JAVG                   130
+#define IDS_LIST_JMAX                   131
+#define IDS_LIST_JINT                   132
+#define IDS_IPINFO_ASN                  133
+#define IDS_IPINFO_PREFIX               134
+#define IDS_IPINFO_COUNTRY              135
+#define IDS_IPINFO_REGISTRY             136
+#define IDS_IPINFO_ALLOCATED            137
+#define IDS_ERR_INIT_SOCKETS            138
+#define IDS_ERR_WIN_VERSION             139
+#define IDS_ERR_ICMP_DLL                140
+#define IDS_ERR_IPHLPAPI_DLL            141
+#define IDS_ERR_ICMP_LIB                142
+#define IDS_ERR_IPV6_SUPPORT            143
+#define IDS_ERR_ICMP_MODULE             144
+#define IDS_ERR_ICMPV6_MODULE           145
+#define IDS_ERR_ICMP_TCP_SOCKET         146
+#define IDS_ERR_ICMP_UDP_SOCKET         147
+#define IDS_ERR_UDP_SOCKET              148
+#define IDS_ERR_NO_HOST                 149
+#define IDS_WARN_UDP_NOT_SUPPORTED      150
+#define IDS_WARN_TCP_IPV4_ONLY          151
+#define IDS_ERR_RESOLVE_HOST            152
+#define IDS_ERR_RESOLVE_HOST_AGAIN      153
+#define IDS_WARN_TCP_IPV4_ONLY_MODE     154
+#define IDS_WARN_UDP_IPV4_ONLY_MODE     155
+#define IDS_EXPORT_TITLE                156
+#define IDS_EXPORT_HEADER               157
+#define IDS_FILTER_TEXT                 158
+#define IDS_FILTER_CSV                  159
+#define IDS_FILTER_HTML                 160
+#define IDS_FILTER_JSON                 161
 #define IDR_MAINFRAME                   128
 #define IDD_DIALOG_OPTIONS              129
 #define IDD_DIALOG_LICENSE              130
@@ -81,13 +136,17 @@
 #define IDC_STATUS_LATENCY_VALUE        2009
 #define IDC_STATUS_JITTER_VALUE         2010
 #define IDC_STATUS_LOSS_VALUE           2011
+#define IDR_MENU_MAIN                   200
+#define ID_LANG_ENGLISH                 32771
+#define ID_LANG_PORTUGUESE              32772
+#define ID_LANG_SPANISH                 32773
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        135
-#define _APS_NEXT_COMMAND_VALUE         32771
+#define _APS_NEXT_COMMAND_VALUE         32774
 #define _APS_NEXT_CONTROL_VALUE         1039
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

@@ -36,6 +36,36 @@ static char THIS_FILE[] = __FILE__;
 
 WinMTRMain WinMTR;
 
+namespace {
+	LANGID GetUiLanguageFromRegistry()
+	{
+		HKEY hKey = NULL;
+		HKEY hKeyConfig = NULL;
+		LANGID langId = MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
+		if(RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\WinMTR", 0, NULL, 0, KEY_READ, NULL, &hKey, NULL) != ERROR_SUCCESS) {
+			return langId;
+		}
+		if(RegCreateKeyEx(hKey, "Config", 0, NULL, 0, KEY_READ, NULL, &hKeyConfig, NULL) != ERROR_SUCCESS) {
+			RegCloseKey(hKey);
+			return langId;
+		}
+
+		char langTag[16] = {0};
+		DWORD size = sizeof(langTag);
+		if(RegQueryValueEx(hKeyConfig, "Language", 0, NULL, reinterpret_cast<unsigned char*>(langTag), &size) == ERROR_SUCCESS) {
+			if(strcmp(langTag, "pt-BR") == 0) {
+				langId = MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
+			} else if(strcmp(langTag, "es-ES") == 0) {
+				langId = MAKELANGID(LANG_SPANISH, SUBLANG_SPANISH_MODERN);
+			}
+		}
+
+		RegCloseKey(hKeyConfig);
+		RegCloseKey(hKey);
+		return langId;
+	}
+}
+
 //*****************************************************************************
 // BEGIN_MESSAGE_MAP
 //
@@ -62,6 +92,7 @@ WinMTRMain::WinMTRMain()
 BOOL WinMTRMain::InitInstance()
 {
 	AppendStartupLog("InitInstance start");
+	SetThreadUILanguage(GetUiLanguageFromRegistry());
 	INITCOMMONCONTROLSEX icex= {sizeof(INITCOMMONCONTROLSEX),ICC_STANDARD_CLASSES};
 	InitCommonControlsEx(&icex);
 	if(!AfxSocketInit()) {
