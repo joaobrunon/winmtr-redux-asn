@@ -68,6 +68,7 @@ public:
 	CListCtrl m_listMTR;
 	CTabCtrl m_tabView;
 	CMFCLinkCtrl m_buttonAppnor;
+	CFont m_uiFont;
 	CFont m_statusValueFont;
 	CFont m_statusSmallFont;
 	CBrush m_metricsCardBrush;
@@ -161,7 +162,10 @@ protected:
 	void SetStatusText(const CString& text);
 	void UpdateStatusTab();
 	void ShowTab(int index);
+	void ApplyUiFont();
 	void ApplyStatusFonts();
+	void PrepareStatusCards();
+	void DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fillColor, const CString& title, const CString& value);
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];
@@ -177,6 +181,7 @@ protected:
 	afx_msg void OnOptions();
 	afx_msg void OnToggleShowIps();
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
 	virtual void OnCancel();
 	
 	afx_msg void OnCTTC();

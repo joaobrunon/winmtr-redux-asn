@@ -251,6 +251,7 @@ BEGIN_MESSAGE_MAP(WinMTRDialog, CDialog)
 	ON_WM_SIZING()
 	ON_WM_QUERYDRAGICON()
 	ON_WM_CTLCOLOR()
+	ON_WM_DRAWITEM()
 	ON_BN_CLICKED(ID_RESTART, OnRestart)
 	ON_BN_CLICKED(ID_OPTIONS, OnOptions)
 	ON_BN_CLICKED(IDC_CHECK_SHOWIPS, OnToggleShowIps)
@@ -393,6 +394,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	char caption[] = {"WinMTR (Redux) v1.00 64bit"};
 #endif
 	
+	ApplyUiFont();
 	SetTimer(1, WINMTR_DIALOG_TIMER, NULL);
 	SetWindowText(caption);
 	
@@ -430,6 +432,7 @@ BOOL WinMTRDialog::OnInitDialog()
 	m_metricsCardBrush.CreateSolidBrush(m_metricsCardColor);
 	m_networkCardBrush.CreateSolidBrush(m_networkCardColor);
 	ApplyStatusFonts();
+	PrepareStatusCards();
 
 	RefreshLocalIpInfo();
 	UpdateStatusTab();
@@ -733,41 +736,21 @@ CString WinMTRDialog::FormatHostLabel(int index) const
 
 void WinMTRDialog::ShowTab(int index)
 {
-	const int statusControls[] = {
-		IDC_STATUS_GROUP,
-		IDC_STATUS_CARD_METRICS,
-		IDC_STATUS_CARD_NETWORK,
-		IDC_STATUS_RESP_LABEL,
-		IDC_STATUS_LAG_ROUTER_LABEL,
-		IDC_STATUS_LAG_INET_LABEL,
-		IDC_STATUS_AVG_LABEL,
-		IDC_STATUS_BEST_LABEL,
-		IDC_STATUS_WORST_LABEL,
-		IDC_STATUS_LATENCY_LABEL,
-		IDC_STATUS_JITTER_LABEL,
-		IDC_STATUS_LOSS_LABEL,
-		IDC_STATUS_LAN_LABEL,
-		IDC_STATUS_WAN_LABEL,
-		IDC_STATUS_ASN_LABEL,
-		IDC_STATUS_RESP_VALUE,
-		IDC_STATUS_LAG_ROUTER_VALUE,
-		IDC_STATUS_LAG_INET_VALUE,
-		IDC_STATUS_AVG_VALUE,
-		IDC_STATUS_BEST_VALUE,
-		IDC_STATUS_WORST_VALUE,
-		IDC_STATUS_LATENCY_VALUE,
-		IDC_STATUS_JITTER_VALUE,
-		IDC_STATUS_LOSS_VALUE,
-		IDC_STATUS_LAN_VALUE,
-		IDC_STATUS_WAN_VALUE,
-		IDC_STATUS_ASN_VALUE
-	};
-
 	bool showStatus = (index == 1);
 	m_listMTR.ShowWindow(showStatus ? SW_HIDE : SW_SHOW);
-	for(int id : statusControls) {
-		CWnd* ctrl = GetDlgItem(id);
+	for(const auto& info : kStatusCards) {
+		CWnd* ctrl = GetDlgItem(info.cardId);
 		if(ctrl) ctrl->ShowWindow(showStatus ? SW_SHOW : SW_HIDE);
+	}
+
+	for(int id : kStatusLabelIds) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) ctrl->ShowWindow(SW_HIDE);
+	}
+
+	for(int id : kStatusContainerIds) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) ctrl->ShowWindow(SW_HIDE);
 	}
 
 	if(showStatus) {
@@ -862,6 +845,27 @@ void WinMTRDialog::UpdateStatusTab()
 	SetDlgItemText(IDC_STATUS_LAN_VALUE, lan);
 	SetDlgItemText(IDC_STATUS_WAN_VALUE, wan);
 	SetDlgItemText(IDC_STATUS_ASN_VALUE, asn);
+}
+
+void WinMTRDialog::ApplyUiFont()
+{
+	NONCLIENTMETRICS ncm{};
+	ncm.cbSize = sizeof(ncm);
+	if(!SystemParametersInfo(SPI_GETNONCLIENTMETRICS, ncm.cbSize, &ncm, 0)) {
+		return;
+	}
+
+	LOGFONT lf = ncm.lfMessageFont;
+	lf.lfQuality = CLEARTYPE_QUALITY;
+	m_uiFont.DeleteObject();
+	if(!m_uiFont.CreateFontIndirect(&lf)) {
+		return;
+	}
+
+	SetFont(&m_uiFont);
+	for(CWnd* child = GetWindow(GW_CHILD); child; child = child->GetNextWindow()) {
+		child->SetFont(&m_uiFont);
+	}
 }
 
 void WinMTRDialog::ApplyStatusFonts()
@@ -1336,100 +1340,37 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		m_tabView.SetWindowPos(NULL, tabRect.TopLeft().x, tabRect.TopLeft().y, rct.Width() - 17, tabRect.Height(), SWP_NOMOVE | SWP_NOZORDER);
 	}
 
-	CWnd* statusGroup = GetDlgItem(IDC_STATUS_GROUP);
-	if(statusGroup) {
-		int statusLeft = listLeft;
-		int statusTop = listTop;
-		statusGroup->SetWindowPos(NULL, statusLeft, statusTop, rct.Width() - 17, rct.Height() - statusTop - 25, SWP_NOZORDER);
-	}
-
-	CWnd* metricsCard = GetDlgItem(IDC_STATUS_CARD_METRICS);
-	CWnd* networkCard = GetDlgItem(IDC_STATUS_CARD_NETWORK);
-	if(metricsCard && networkCard) {
-		int left = listLeft + 5;
-		int top = listTop + 9;
-		int height = rct.Height() - listTop - 35;
-		int width = rct.Width() - 27;
-		int gap = 8;
-		int minMetricsWidth = 180;
-		int networkWidth = width - minMetricsWidth - gap;
-		if(networkWidth < 220) networkWidth = 220;
-		if(networkWidth > 280) networkWidth = 280;
-		int metricsWidth = width - networkWidth - gap;
-		if(metricsWidth < minMetricsWidth) {
-			metricsWidth = minMetricsWidth;
-			networkWidth = width - metricsWidth - gap;
-		}
-		metricsCard->SetWindowPos(NULL, left, top, metricsWidth, height, SWP_NOZORDER);
-		networkCard->SetWindowPos(NULL, left + metricsWidth + gap, top, networkWidth, 70, SWP_NOZORDER);
-
-		CRect netRect;
-		networkCard->GetWindowRect(&netRect);
-		ScreenToClient(&netRect);
-
-		const int labelLeft = netRect.left + 10;
-		const int valueLeft = netRect.left + 54;
-		const int valueWidth = netRect.right - valueLeft - 8;
-		const int lineHeight = 16;
-		const int firstLine = netRect.top + 14;
-		struct Row {
-			int labelId;
-			int valueId;
-			int offset;
-		};
-		const Row rows[] = {
-			{IDC_STATUS_LAN_LABEL, IDC_STATUS_LAN_VALUE, 0},
-			{IDC_STATUS_WAN_LABEL, IDC_STATUS_WAN_VALUE, 1},
-			{IDC_STATUS_ASN_LABEL, IDC_STATUS_ASN_VALUE, 2}
-		};
-		for(const auto& row : rows) {
-			int topRow = firstLine + row.offset * lineHeight;
-			CWnd* label = GetDlgItem(row.labelId);
-			CWnd* value = GetDlgItem(row.valueId);
-			if(label) {
-				label->SetWindowPos(NULL, labelLeft, topRow, 40, 10, SWP_NOZORDER);
-			}
-			if(value) {
-				value->SetWindowPos(NULL, valueLeft, topRow, valueWidth, 10, SWP_NOZORDER);
+	const int padding = 8;
+	const int gap = 8;
+	const int minCardWidth = 150;
+	const int cardHeight = 52;
+	int areaLeft = listLeft + padding;
+	int areaTop = listTop + padding;
+	int areaWidth = rct.Width() - 17 - padding * 2;
+	int areaHeight = rct.Height() - listTop - 25 - padding * 2;
+	if(areaWidth > 0 && areaHeight > 0) {
+		const int cardCount = static_cast<int>(sizeof(kStatusCards) / sizeof(kStatusCards[0]));
+		int maxColumns = (areaWidth + gap) / (minCardWidth + gap);
+		if(maxColumns < 1) maxColumns = 1;
+		int columns = maxColumns;
+		for(int cols = maxColumns; cols >= 1; --cols) {
+			int rows = (cardCount + cols - 1) / cols;
+			int neededHeight = rows * cardHeight + gap * (rows - 1);
+			if(neededHeight <= areaHeight) {
+				columns = cols;
+				break;
 			}
 		}
+		int cardWidth = (areaWidth - gap * (columns - 1)) / columns;
 
-		CRect metricsRect;
-		metricsCard->GetWindowRect(&metricsRect);
-		ScreenToClient(&metricsRect);
-
-		const int metricsLabelLeft = metricsRect.left + 10;
-		const int metricsValueLeft = metricsRect.left + 125;
-		int metricsValueWidth = metricsRect.right - metricsValueLeft - 10;
-		if(metricsValueWidth < 60) metricsValueWidth = 60;
-		const int metricsLineHeight = 14;
-		const int metricsFirstLine = metricsRect.top + 16;
-		const int metricsLabelWidth = metricsValueLeft - metricsLabelLeft - 6;
-		struct MetricsRow {
-			int labelId;
-			int valueId;
-			int offset;
-		};
-		const MetricsRow metricsRows[] = {
-			{IDC_STATUS_RESP_LABEL, IDC_STATUS_RESP_VALUE, 0},
-			{IDC_STATUS_LAG_ROUTER_LABEL, IDC_STATUS_LAG_ROUTER_VALUE, 1},
-			{IDC_STATUS_LAG_INET_LABEL, IDC_STATUS_LAG_INET_VALUE, 2},
-			{IDC_STATUS_AVG_LABEL, IDC_STATUS_AVG_VALUE, 3},
-			{IDC_STATUS_BEST_LABEL, IDC_STATUS_BEST_VALUE, 4},
-			{IDC_STATUS_WORST_LABEL, IDC_STATUS_WORST_VALUE, 5},
-			{IDC_STATUS_LATENCY_LABEL, IDC_STATUS_LATENCY_VALUE, 6},
-			{IDC_STATUS_JITTER_LABEL, IDC_STATUS_JITTER_VALUE, 7},
-			{IDC_STATUS_LOSS_LABEL, IDC_STATUS_LOSS_VALUE, 8}
-		};
-		for(const auto& row : metricsRows) {
-			int topRow = metricsFirstLine + row.offset * metricsLineHeight;
-			CWnd* label = GetDlgItem(row.labelId);
-			CWnd* value = GetDlgItem(row.valueId);
-			if(label) {
-				label->SetWindowPos(NULL, metricsLabelLeft, topRow, metricsLabelWidth, 10, SWP_NOZORDER);
-			}
-			if(value) {
-				value->SetWindowPos(NULL, metricsValueLeft, topRow, metricsValueWidth, 10, SWP_NOZORDER);
+		for(int i = 0; i < cardCount; ++i) {
+			int row = i / columns;
+			int col = i % columns;
+			int left = areaLeft + col * (cardWidth + gap);
+			int top = areaTop + row * (cardHeight + gap);
+			CWnd* card = GetDlgItem(kStatusCards[i].cardId);
+			if(card) {
+				card->SetWindowPos(NULL, left, top, cardWidth, cardHeight, SWP_NOZORDER);
 			}
 		}
 	}
@@ -2293,6 +2234,159 @@ HBRUSH WinMTRDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 
 	return hbr;
+}
+
+namespace {
+	COLORREF AdjustColor(COLORREF color, int delta)
+	{
+		const int r = min(255, max(0, static_cast<int>(GetRValue(color)) + delta));
+		const int g = min(255, max(0, static_cast<int>(GetGValue(color)) + delta));
+		const int b = min(255, max(0, static_cast<int>(GetBValue(color)) + delta));
+		return RGB(r, g, b);
+	}
+
+	struct StatusCardInfo {
+		int cardId;
+		int labelId;
+		bool isNetwork;
+	};
+
+	const StatusCardInfo kStatusCards[] = {
+		{IDC_STATUS_RESP_VALUE, IDC_STATUS_RESP_LABEL, false},
+		{IDC_STATUS_LAG_ROUTER_VALUE, IDC_STATUS_LAG_ROUTER_LABEL, false},
+		{IDC_STATUS_LAG_INET_VALUE, IDC_STATUS_LAG_INET_LABEL, false},
+		{IDC_STATUS_AVG_VALUE, IDC_STATUS_AVG_LABEL, false},
+		{IDC_STATUS_BEST_VALUE, IDC_STATUS_BEST_LABEL, false},
+		{IDC_STATUS_WORST_VALUE, IDC_STATUS_WORST_LABEL, false},
+		{IDC_STATUS_LATENCY_VALUE, IDC_STATUS_LATENCY_LABEL, false},
+		{IDC_STATUS_JITTER_VALUE, IDC_STATUS_JITTER_LABEL, false},
+		{IDC_STATUS_LOSS_VALUE, IDC_STATUS_LOSS_LABEL, false},
+		{IDC_STATUS_LAN_VALUE, IDC_STATUS_LAN_LABEL, true},
+		{IDC_STATUS_WAN_VALUE, IDC_STATUS_WAN_LABEL, true},
+		{IDC_STATUS_ASN_VALUE, IDC_STATUS_ASN_LABEL, true}
+	};
+
+	const int kStatusLabelIds[] = {
+		IDC_STATUS_RESP_LABEL,
+		IDC_STATUS_LAG_ROUTER_LABEL,
+		IDC_STATUS_LAG_INET_LABEL,
+		IDC_STATUS_AVG_LABEL,
+		IDC_STATUS_BEST_LABEL,
+		IDC_STATUS_WORST_LABEL,
+		IDC_STATUS_LATENCY_LABEL,
+		IDC_STATUS_JITTER_LABEL,
+		IDC_STATUS_LOSS_LABEL,
+		IDC_STATUS_LAN_LABEL,
+		IDC_STATUS_WAN_LABEL,
+		IDC_STATUS_ASN_LABEL
+	};
+
+	const int kStatusContainerIds[] = {
+		IDC_STATUS_GROUP,
+		IDC_STATUS_CARD_METRICS,
+		IDC_STATUS_CARD_NETWORK
+	};
+}
+
+void WinMTRDialog::DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fillColor, const CString& title, const CString& value)
+{
+	if(!drawItemStruct) return;
+	CDC* pDC = CDC::FromHandle(drawItemStruct->hDC);
+	if(!pDC) return;
+
+	CRect rect(drawItemStruct->rcItem);
+	CRect shadowRect = rect;
+	shadowRect.OffsetRect(1, 1);
+	shadowRect.DeflateRect(1, 1);
+
+	const COLORREF shadowColor = AdjustColor(fillColor, -30);
+	const COLORREF borderColor = AdjustColor(fillColor, -20);
+
+	CBrush shadowBrush(shadowColor);
+	CPen shadowPen(PS_SOLID, 1, shadowColor);
+	CBrush cardBrush(fillColor);
+	CPen borderPen(PS_SOLID, 1, borderColor);
+
+	CPen* oldPen = pDC->SelectObject(&shadowPen);
+	CBrush* oldBrush = pDC->SelectObject(&shadowBrush);
+	pDC->RoundRect(shadowRect, CPoint(10, 10));
+
+	CRect cardRect = rect;
+	cardRect.DeflateRect(0, 0, 2, 2);
+	pDC->SelectObject(&borderPen);
+	pDC->SelectObject(&cardBrush);
+	pDC->RoundRect(cardRect, CPoint(10, 10));
+
+	pDC->SelectObject(oldPen);
+	pDC->SelectObject(oldBrush);
+
+	if(!title.IsEmpty()) {
+		pDC->SetBkMode(TRANSPARENT);
+		CRect textRect = cardRect;
+		textRect.DeflateRect(12, 8, 12, 6);
+
+		CFont* oldFont = pDC->SelectObject(&m_statusSmallFont);
+		pDC->SetTextColor(m_statusTextColor);
+		CRect titleRect = textRect;
+		titleRect.bottom = titleRect.top + 14;
+		pDC->DrawText(title, &titleRect, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+		pDC->SelectObject(&m_statusValueFont);
+		pDC->SetTextColor(m_statusValueColor);
+		CRect valueRect = textRect;
+		valueRect.top = titleRect.bottom + 4;
+		pDC->DrawText(value, &valueRect, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
+		pDC->SelectObject(oldFont);
+	}
+}
+
+void WinMTRDialog::PrepareStatusCards()
+{
+	for(int id : kStatusLabelIds) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) {
+			ctrl->ShowWindow(SW_HIDE);
+		}
+	}
+
+	for(const auto& info : kStatusCards) {
+		CWnd* ctrl = GetDlgItem(info.cardId);
+		if(ctrl) {
+			ctrl->ModifyStyle(0, SS_OWNERDRAW);
+		}
+	}
+
+	for(int id : kStatusContainerIds) {
+		CWnd* ctrl = GetDlgItem(id);
+		if(ctrl) {
+			ctrl->ShowWindow(SW_HIDE);
+		}
+	}
+}
+
+void WinMTRDialog::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
+{
+	for(const auto& info : kStatusCards) {
+		if(nIDCtl != info.cardId) {
+			continue;
+		}
+
+		CString title;
+		CString value;
+		CWnd* label = GetDlgItem(info.labelId);
+		if(label) {
+			label->GetWindowText(title);
+		}
+		CWnd* card = GetDlgItem(info.cardId);
+		if(card) {
+			card->GetWindowText(value);
+		}
+
+		DrawStatusCard(lpDrawItemStruct, info.isNetwork ? m_networkCardColor : m_metricsCardColor, title, value);
+		return;
+	}
+
+	CDialog::OnDrawItem(nIDCtl, lpDrawItemStruct);
 }
 
 void WinMTRDialog::OnTabSelchange(NMHDR* pNMHDR, LRESULT* pResult)
