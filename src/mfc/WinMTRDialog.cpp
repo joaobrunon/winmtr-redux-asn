@@ -1531,41 +1531,18 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		currentRight -= (buttonWidth + spacing);
 	}
 
-	CRect rightGroup;
-	m_staticS.GetWindowRect(&rightGroup);
-	ScreenToClient(&rightGroup);
-	int checkRight = rightGroup.right - 8;
-	int checkLeft = rightGroup.left + 6;
-	CRect comboRect;
-	m_comboHost.GetWindowRect(&comboRect);
-	ScreenToClient(&comboRect);
-	checkLeft = std::max(checkLeft, static_cast<int>(comboRect.right + spacing));
-	if(hasStartRect) {
-		checkRight = std::min(checkRight, static_cast<int>(startRect.left - spacing));
-	}
-	if(checkRight <= checkLeft) {
-		checkRight = rightGroup.right - 8;
-		checkLeft = rightGroup.left + 6;
-	}
-	CRect showIpsRect;
-	m_checkShowIps.GetWindowRect(&showIpsRect);
-	ScreenToClient(&showIpsRect);
 	CRect ipv6Rect;
 	m_checkIPv6.GetWindowRect(&ipv6Rect);
 	ScreenToClient(&ipv6Rect);
+	CRect showIpsRect;
+	m_checkShowIps.GetWindowRect(&showIpsRect);
+	ScreenToClient(&showIpsRect);
 	int ipv6Width = std::max(static_cast<int>(ipv6Rect.Width()), MeasureControlWidth(&m_checkIPv6, 10));
 	int showIpsWidth = std::max(static_cast<int>(showIpsRect.Width()), MeasureControlWidth(&m_checkShowIps, 10));
-	int combinedWidth = ipv6Width + spacing + showIpsWidth;
-	if(combinedWidth > (checkRight - checkLeft)) {
-		m_checkIPv6.SetWindowPos(NULL, checkLeft, ipv6Rect.top, ipv6Width, ipv6Rect.Height(), SWP_NOZORDER);
-		m_checkShowIps.SetWindowPos(NULL, checkLeft, ipv6Rect.top + ipv6Rect.Height() + 4, showIpsWidth, showIpsRect.Height(), SWP_NOZORDER);
-	} else {
-		int showIpsLeft = checkRight - showIpsWidth;
-		m_checkShowIps.SetWindowPos(NULL, showIpsLeft, showIpsRect.top, showIpsWidth, showIpsRect.Height(), SWP_NOZORDER);
-		int ipv6Left = showIpsLeft - spacing - ipv6Width;
-		if(ipv6Left < checkLeft) ipv6Left = checkLeft;
-		m_checkIPv6.SetWindowPos(NULL, ipv6Left, ipv6Rect.top, ipv6Width, ipv6Rect.Height(), SWP_NOZORDER);
-	}
+	int checkboxTop = exportRowTop;
+	int checkboxLeft = exportLeftLimit;
+	m_checkIPv6.SetWindowPos(NULL, checkboxLeft, checkboxTop, ipv6Width, ipv6Rect.Height(), SWP_NOZORDER);
+	m_checkShowIps.SetWindowPos(NULL, checkboxLeft + ipv6Width + spacing, checkboxTop, showIpsWidth, showIpsRect.Height(), SWP_NOZORDER);
 	
 	m_listMTR.GetWindowRect(&lb);
 	ScreenToClient(&lb);
