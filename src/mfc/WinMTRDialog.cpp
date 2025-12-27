@@ -61,6 +61,36 @@ namespace {
 		return tag;
 	}
 
+	int MeasureControlWidth(CWnd* control, int extraPadding)
+	{
+		if(!control) return 0;
+		CString text;
+		control->GetWindowText(text);
+		if(text.IsEmpty()) return 0;
+
+		CDC* dc = control->GetDC();
+		if(!dc) return 0;
+		CFont* font = control->GetFont();
+		CFont* oldFont = dc->SelectObject(font ? font : control->GetParent()->GetFont());
+		CRect rect(0, 0, 0, 0);
+		dc->DrawText(text, &rect, DT_SINGLELINE | DT_CALCRECT);
+		dc->SelectObject(oldFont);
+		control->ReleaseDC(dc);
+		return rect.Width() + extraPadding;
+	}
+
+	int MeasureListHeaderWidth(CListCtrl& list, const CString& text, int extraPadding)
+	{
+		CDC* dc = list.GetDC();
+		if(!dc) return 0;
+		CFont* oldFont = dc->SelectObject(list.GetFont());
+		CRect rect(0, 0, 0, 0);
+		dc->DrawText(text, &rect, DT_SINGLELINE | DT_CALCRECT);
+		dc->SelectObject(oldFont);
+		list.ReleaseDC(dc);
+		return rect.Width() + extraPadding;
+	}
+
 	struct StatusCardInfo {
 		int cardId;
 		int labelId;
@@ -671,8 +701,12 @@ void WinMTRDialog::ApplyColumnOrder()
 	while(m_listMTR.DeleteColumn(0)) {}
 	m_listMTR.DeleteAllItems();
 
-	m_listMTR.InsertColumn(0, LoadResString(IDS_LIST_HOST), LVCFMT_LEFT, 220, -1);
-	m_listMTR.InsertColumn(1, LoadResString(IDS_LIST_NR), LVCFMT_LEFT, 30, -1);
+	CString hostLabel = LoadResString(IDS_LIST_HOST);
+	CString nrLabel = LoadResString(IDS_LIST_NR);
+	int hostWidth = std::max(220, MeasureListHeaderWidth(m_listMTR, hostLabel, 16));
+	int nrWidth = std::max(30, MeasureListHeaderWidth(m_listMTR, nrLabel, 12));
+	m_listMTR.InsertColumn(0, hostLabel, LVCFMT_LEFT, hostWidth, -1);
+	m_listMTR.InsertColumn(1, nrLabel, LVCFMT_LEFT, nrWidth, -1);
 
 	auto addColumn = [&](const CString& name, int width) {
 		int index = m_listMTR.GetHeaderCtrl()->GetItemCount();
@@ -681,25 +715,82 @@ void WinMTRDialog::ApplyColumnOrder()
 
 	for(char code : orderFields) {
 		switch(code) {
-		case 'L': addColumn(LoadResString(IDS_LIST_LOSS), 50); break;
-		case 'D': addColumn(LoadResString(IDS_LIST_DROP), 50); break;
-		case 'R': addColumn(LoadResString(IDS_LIST_RECV), 50); break;
-		case 'S': addColumn(LoadResString(IDS_LIST_SENT), 50); break;
-		case 'N': addColumn(LoadResString(IDS_LIST_LAST), 50); break;
-		case 'B': addColumn(LoadResString(IDS_LIST_BEST), 50); break;
-		case 'A': addColumn(LoadResString(IDS_LIST_AVG), 50); break;
-		case 'W': addColumn(LoadResString(IDS_LIST_WRST), 50); break;
-		case 'V': addColumn(LoadResString(IDS_LIST_STDEV), 50); break;
-		case 'G': addColumn(LoadResString(IDS_LIST_GMEAN), 50); break;
-		case 'J': addColumn(LoadResString(IDS_LIST_JTTR), 50); break;
-		case 'M': addColumn(LoadResString(IDS_LIST_JAVG), 50); break;
-		case 'X': addColumn(LoadResString(IDS_LIST_JMAX), 50); break;
-		case 'I': addColumn(LoadResString(IDS_LIST_JINT), 50); break;
+		case 'L': {
+			CString label = LoadResString(IDS_LIST_LOSS);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'D': {
+			CString label = LoadResString(IDS_LIST_DROP);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'R': {
+			CString label = LoadResString(IDS_LIST_RECV);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'S': {
+			CString label = LoadResString(IDS_LIST_SENT);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'N': {
+			CString label = LoadResString(IDS_LIST_LAST);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'B': {
+			CString label = LoadResString(IDS_LIST_BEST);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'A': {
+			CString label = LoadResString(IDS_LIST_AVG);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'W': {
+			CString label = LoadResString(IDS_LIST_WRST);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'V': {
+			CString label = LoadResString(IDS_LIST_STDEV);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'G': {
+			CString label = LoadResString(IDS_LIST_GMEAN);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'J': {
+			CString label = LoadResString(IDS_LIST_JTTR);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'M': {
+			CString label = LoadResString(IDS_LIST_JAVG);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'X': {
+			CString label = LoadResString(IDS_LIST_JMAX);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
+		case 'I': {
+			CString label = LoadResString(IDS_LIST_JINT);
+			addColumn(label, std::max(50, MeasureListHeaderWidth(m_listMTR, label, 12)));
+			break;
+		}
 		default: break;
 		}
 	}
 	if(asnEnabled) {
-		addColumn(IpinfoLabel(ipinfoMode), 120);
+		CString label = IpinfoLabel(ipinfoMode);
+		addColumn(label, std::max(120, MeasureListHeaderWidth(m_listMTR, label, 16)));
 	}
 	AdjustListColumns();
 }
@@ -1363,13 +1454,15 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	for(auto* btn : topRightButtons) {
 		btn->GetWindowRect(&lb);
 		ScreenToClient(&lb);
-		btn->SetWindowPos(NULL, currentRight - lb.Width(), lb.TopLeft().y, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		int desiredWidth = MeasureControlWidth(btn, 18);
+		int buttonWidth = std::max(static_cast<int>(lb.Width()), desiredWidth);
+		btn->SetWindowPos(NULL, currentRight - buttonWidth, lb.TopLeft().y, buttonWidth, lb.Height(), SWP_NOZORDER);
 		if(btn == &m_buttonStart) {
 			startRect = lb;
-			startRect.OffsetRect(currentRight - lb.Width() - lb.left, 0);
+			startRect.OffsetRect(currentRight - buttonWidth - lb.left, 0);
 			hasStartRect = true;
 		}
-		currentRight -= (lb.Width() + spacing);
+		currentRight -= (buttonWidth + spacing);
 	}
 
 	if(hasStartRect) {
@@ -1390,6 +1483,7 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 		&m_buttonExpJson,
 		&m_buttonExpCsv
 	};
+	int exportWidths[static_cast<int>(sizeof(exportButtons) / sizeof(exportButtons[0]))] = {};
 	int exportLeftLimit = baseExportLeft;
 	if(exportLeftLimit <= 0 || exportLeftLimit == INT_MAX) {
 		exportButtons[0]->GetWindowRect(&lb);
@@ -1402,10 +1496,14 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	int exportRowHeight = baseExportHeight > 0 ? baseExportHeight : lb.Height();
 	int exportRowTop = (baseExportTop > 0 ? baseExportTop : lb.top) + exportTopPad;
 	int exportTotalWidth = 0;
+	int exportIndex = 0;
 	for(auto* btn : exportButtons) {
 		btn->GetWindowRect(&lb);
 		ScreenToClient(&lb);
-		exportTotalWidth += lb.Width();
+		int desiredWidth = MeasureControlWidth(btn, 16);
+		int buttonWidth = std::max(static_cast<int>(lb.Width()), desiredWidth);
+		exportWidths[exportIndex++] = buttonWidth;
+		exportTotalWidth += buttonWidth;
 	}
 	exportTotalWidth += spacing * (static_cast<int>(sizeof(exportButtons) / sizeof(exportButtons[0])) - 1);
 	int exportAvailable = rct.Width() - rightMargin - exportLeftLimit;
@@ -1419,16 +1517,18 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 
 	int row = 0;
 	currentRight = rct.Width() - rightMargin;
+	exportIndex = 0;
 	for(auto* btn : exportButtons) {
 		btn->GetWindowRect(&lb);
 		ScreenToClient(&lb);
-		if(row == 0 && (currentRight - lb.Width() < exportLeftLimit) && wrapExport) {
+		int buttonWidth = exportWidths[exportIndex++];
+		if(row == 0 && (currentRight - buttonWidth < exportLeftLimit) && wrapExport) {
 			row = 1;
 			currentRight = rct.Width() - rightMargin;
 		}
 		int rowTop = exportRowTop + (row * (exportRowHeight + 4));
-		btn->SetWindowPos(NULL, currentRight - lb.Width(), rowTop, lb.Width(), lb.Height(), SWP_NOSIZE | SWP_NOZORDER);
-		currentRight -= (lb.Width() + spacing);
+		btn->SetWindowPos(NULL, currentRight - buttonWidth, rowTop, buttonWidth, lb.Height(), SWP_NOZORDER);
+		currentRight -= (buttonWidth + spacing);
 	}
 
 	CRect rightGroup;
@@ -1453,16 +1553,18 @@ void WinMTRDialog::OnSize(UINT nType, int cx, int cy)
 	CRect ipv6Rect;
 	m_checkIPv6.GetWindowRect(&ipv6Rect);
 	ScreenToClient(&ipv6Rect);
-	int combinedWidth = ipv6Rect.Width() + spacing + showIpsRect.Width();
+	int ipv6Width = std::max(static_cast<int>(ipv6Rect.Width()), MeasureControlWidth(&m_checkIPv6, 10));
+	int showIpsWidth = std::max(static_cast<int>(showIpsRect.Width()), MeasureControlWidth(&m_checkShowIps, 10));
+	int combinedWidth = ipv6Width + spacing + showIpsWidth;
 	if(combinedWidth > (checkRight - checkLeft)) {
-		m_checkIPv6.SetWindowPos(NULL, checkLeft, ipv6Rect.top, ipv6Rect.Width(), ipv6Rect.Height(), SWP_NOSIZE | SWP_NOZORDER);
-		m_checkShowIps.SetWindowPos(NULL, checkLeft, ipv6Rect.top + ipv6Rect.Height() + 4, showIpsRect.Width(), showIpsRect.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		m_checkIPv6.SetWindowPos(NULL, checkLeft, ipv6Rect.top, ipv6Width, ipv6Rect.Height(), SWP_NOZORDER);
+		m_checkShowIps.SetWindowPos(NULL, checkLeft, ipv6Rect.top + ipv6Rect.Height() + 4, showIpsWidth, showIpsRect.Height(), SWP_NOZORDER);
 	} else {
-		int showIpsLeft = checkRight - showIpsRect.Width();
-		m_checkShowIps.SetWindowPos(NULL, showIpsLeft, showIpsRect.top, showIpsRect.Width(), showIpsRect.Height(), SWP_NOSIZE | SWP_NOZORDER);
-		int ipv6Left = showIpsLeft - spacing - ipv6Rect.Width();
+		int showIpsLeft = checkRight - showIpsWidth;
+		m_checkShowIps.SetWindowPos(NULL, showIpsLeft, showIpsRect.top, showIpsWidth, showIpsRect.Height(), SWP_NOZORDER);
+		int ipv6Left = showIpsLeft - spacing - ipv6Width;
 		if(ipv6Left < checkLeft) ipv6Left = checkLeft;
-		m_checkIPv6.SetWindowPos(NULL, ipv6Left, ipv6Rect.top, ipv6Rect.Width(), ipv6Rect.Height(), SWP_NOSIZE | SWP_NOZORDER);
+		m_checkIPv6.SetWindowPos(NULL, ipv6Left, ipv6Rect.top, ipv6Width, ipv6Rect.Height(), SWP_NOZORDER);
 	}
 	
 	m_listMTR.GetWindowRect(&lb);
