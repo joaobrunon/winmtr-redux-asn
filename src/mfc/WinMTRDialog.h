@@ -166,6 +166,8 @@ protected:
 	void ApplyStatusFonts();
 	void PrepareStatusCards();
 	void DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fillColor, const CString& title, const CString& value);
+	CString m_statusCardTitles[12];
+	CString m_statusCardValues[12];
 	
 	int m_autostart;
 	char msz_defaulthostname[1000];

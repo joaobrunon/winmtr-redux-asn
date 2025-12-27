@@ -51,6 +51,21 @@ namespace {
 		{IDC_STATUS_ASN_VALUE, IDC_STATUS_ASN_LABEL, true}
 	};
 
+	const char* const kStatusCardTitleFallbacks[] = {
+		"Responsiveness",
+		"Lag to router",
+		"Lag to internet",
+		"Average",
+		"Best",
+		"Worst",
+		"Latency typical",
+		"Jitter typical",
+		"Loss",
+		"LAN",
+		"WAN",
+		"ASN"
+	};
+
 	const int kStatusLabelIds[] = {
 		IDC_STATUS_RESP_LABEL,
 		IDC_STATUS_LAG_ROUTER_LABEL,
@@ -890,8 +905,26 @@ void WinMTRDialog::UpdateStatusTab()
 	SetDlgItemText(IDC_STATUS_WAN_VALUE, wan);
 	SetDlgItemText(IDC_STATUS_ASN_VALUE, asn);
 
-	for(const auto& info : kStatusCards) {
-		CWnd* ctrl = GetDlgItem(info.cardId);
+	const int cardCount = static_cast<int>(sizeof(kStatusCards) / sizeof(kStatusCards[0]));
+	const CString values[] = {
+		resp,
+		lagRouter,
+		lagInternet,
+		avg,
+		best,
+		worst,
+		latency,
+		jitter,
+		loss,
+		lan,
+		wan,
+		asn
+	};
+	for(int i = 0; i < cardCount; ++i) {
+		if(i < static_cast<int>(sizeof(values) / sizeof(values[0]))) {
+			m_statusCardValues[i] = values[i];
+		}
+		CWnd* ctrl = GetDlgItem(kStatusCards[i].cardId);
 		if(ctrl) {
 			ctrl->Invalidate();
 		}
@@ -2329,28 +2362,29 @@ void WinMTRDialog::DrawStatusCard(LPDRAWITEMSTRUCT drawItemStruct, COLORREF fill
 	pDC->SelectObject(oldPen);
 	pDC->SelectObject(oldBrush);
 
+	pDC->SetBkMode(TRANSPARENT);
+	CRect textRect = cardRect;
+	textRect.DeflateRect(12, 8, 12, 6);
+
+	CFont* oldFont = pDC->SelectObject(&m_statusSmallFont);
+	pDC->SetTextColor(m_statusTextColor);
+	CRect titleRect = textRect;
+	titleRect.bottom = titleRect.top + 14;
 	if(!title.IsEmpty()) {
-		pDC->SetBkMode(TRANSPARENT);
-		CRect textRect = cardRect;
-		textRect.DeflateRect(12, 8, 12, 6);
-
-		CFont* oldFont = pDC->SelectObject(&m_statusSmallFont);
-		pDC->SetTextColor(m_statusTextColor);
-		CRect titleRect = textRect;
-		titleRect.bottom = titleRect.top + 14;
 		pDC->DrawText(title, &titleRect, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-		pDC->SelectObject(&m_statusValueFont);
-		pDC->SetTextColor(m_statusValueColor);
-		CRect valueRect = textRect;
-		valueRect.top = titleRect.bottom + 4;
-		pDC->DrawText(value, &valueRect, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
-		pDC->SelectObject(oldFont);
 	}
+
+	pDC->SelectObject(&m_statusValueFont);
+	pDC->SetTextColor(m_statusValueColor);
+	CRect valueRect = textRect;
+	valueRect.top = titleRect.bottom + 4;
+	pDC->DrawText(value, &valueRect, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
+	pDC->SelectObject(oldFont);
 }
 
 void WinMTRDialog::PrepareStatusCards()
 {
+	const int cardCount = static_cast<int>(sizeof(kStatusCards) / sizeof(kStatusCards[0]));
 	for(int id : kStatusLabelIds) {
 		CWnd* ctrl = GetDlgItem(id);
 		if(ctrl) {
@@ -2358,7 +2392,18 @@ void WinMTRDialog::PrepareStatusCards()
 		}
 	}
 
-	for(const auto& info : kStatusCards) {
+	for(int i = 0; i < cardCount; ++i) {
+		const auto& info = kStatusCards[i];
+		CString title;
+		CWnd* label = GetDlgItem(info.labelId);
+		if(label) {
+			label->GetWindowText(title);
+		}
+		if(title.IsEmpty() && i < static_cast<int>(sizeof(kStatusCardTitleFallbacks) / sizeof(kStatusCardTitleFallbacks[0]))) {
+			title = kStatusCardTitleFallbacks[i];
+		}
+		m_statusCardTitles[i] = title;
+
 		CWnd* ctrl = GetDlgItem(info.cardId);
 		if(ctrl) {
 			ctrl->ModifyStyle(0, SS_OWNERDRAW);
@@ -2377,23 +2422,30 @@ void WinMTRDialog::PrepareStatusCards()
 
 void WinMTRDialog::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 {
-	for(const auto& info : kStatusCards) {
+	const int cardCount = static_cast<int>(sizeof(kStatusCards) / sizeof(kStatusCards[0]));
+	for(int i = 0; i < cardCount; ++i) {
+		const auto& info = kStatusCards[i];
 		if(nIDCtl != info.cardId) {
 			continue;
 		}
 
-		CString title;
-		CString value;
-		CWnd* label = GetDlgItem(info.labelId);
-		if(label) {
-			label->GetWindowText(title);
+		CString title = m_statusCardTitles[i];
+		if(title.IsEmpty() && i < static_cast<int>(sizeof(kStatusCardTitleFallbacks) / sizeof(kStatusCardTitleFallbacks[0]))) {
+			title = kStatusCardTitleFallbacks[i];
 		}
-		CWnd* card = GetDlgItem(info.cardId);
-		if(card) {
-			card->GetWindowText(value);
+		CString value = m_statusCardValues[i];
+		if(value.IsEmpty()) {
+			CWnd* card = GetDlgItem(info.cardId);
+			if(card) {
+				card->GetWindowText(value);
+			}
 		}
 
-		DrawStatusCard(lpDrawItemStruct, info.isNetwork ? m_networkCardColor : m_metricsCardColor, title, value);
+		DrawStatusCard(
+			lpDrawItemStruct,
+			info.isNetwork ? m_networkCardColor : m_metricsCardColor,
+			title,
+			value);
 		return;
 	}
 
